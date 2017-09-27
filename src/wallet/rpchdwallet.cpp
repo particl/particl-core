@@ -796,7 +796,7 @@ UniValue extkey(const JSONRPCRequest &request)
     // path:
     // master keys are hashed with an integer (child_index) to form child keys
     // each child key can spawn more keys
-    // payments etc are not send to keys derived from the master keys 
+    // payments etc are not send to keys derived from the master keys
     //  m - master key
     //  m/0 - key0 (1st) key derived from m
     //  m/1/2 key2 (3rd) key derived from key1 derived from m
@@ -1102,7 +1102,7 @@ UniValue extkey(const JSONRPCRequest &request)
                 throw std::runtime_error("TxnCommit failed.");
             result.pushKV("result", "Success.");
             result.pushKV("key_label", sek.sLabel);
-            result.pushKV("note", "Please backup your wallet."); // TODO: check for child of existing key? 
+            result.pushKV("note", "Please backup your wallet."); // TODO: check for child of existing key?
         } // cs_wallet
     } else
     if (mode == "importaccount")
@@ -2033,7 +2033,7 @@ UniValue importstealthaddress(const JSONRPCRequest &request)
 
     UniValue result(UniValue::VOBJ);
     bool fFound = false;
-    // Find if address already exists, can update 
+    // Find if address already exists, can update
     std::set<CStealthAddress>::iterator it;
     for (it = pwallet->stealthAddresses.begin(); it != pwallet->stealthAddresses.end(); ++it)
     {
@@ -2647,20 +2647,172 @@ UniValue clearwallettransactions(const JSONRPCRequest &request)
     return result;
 }
 
+static void WalletTxToJSON(CWalletTx& wtx, UniValue& entry)
+{
+    int confirms = wtx.GetDepthInMainChain();
+    entry.push_back(Pair("confirmations", confirms));
+    if (wtx.IsCoinBase())
+        entry.push_back(Pair("generated", true));
+    if (confirms > 0)
+    {
+        entry.push_back(Pair("blockhash", wtx.hashBlock.GetHex()));
+        entry.push_back(Pair("blockindex", wtx.nIndex));
+        PushTime(entry, "blocktime", mapBlockIndex[wtx.hashBlock]->GetBlockTime());
+    } else {
+        entry.push_back(Pair("trusted", wtx.IsTrusted()));
+    }
+    uint256 hash = wtx.GetHash();
+    entry.push_back(Pair("txid", hash.GetHex()));
+    PushTime(entry, "time", wtx.GetTxTime());
+    PushTime(entry, "timereceived", wtx.nTimeReceived);
+
+    // Add opt-in RBF status
+    std::string rbfStatus = "no";
+    if (confirms <= 0) {
+        LOCK(mempool.cs);
+        RBFTransactionState rbfState = IsRBFOptIn(wtx, mempool);
+        if (rbfState == RBF_TRANSACTIONSTATE_UNKNOWN)
+            rbfStatus = "unknown";
+        else if (rbfState == RBF_TRANSACTIONSTATE_REPLACEABLE_BIP125)
+            rbfStatus = "yes";
+    }
+    entry.push_back(Pair("bip125_replaceable", rbfStatus));
+
+    for (const std::pair<std::string, std::string>& item : wtx.mapValue)
+        entry.push_back(Pair(item.first, item.second));
+}
+
+static void MaybePushAddress(UniValue & entry, const CTxDestination &dest)
+{
+    CBitcoinAddress addr;
+    if (addr.Set(dest))
+        entry.push_back(Pair("address", addr.ToString()));
+}
+
+static void ListTransactions(
+    CHDWallet * const pwallet,
+    CWalletTx & wtx,
+    UniValue & ret,
+    const isminefilter & watchonly)
+{
+    // GetAmounts variables
+    std::list<COutputEntry> listReceived;
+    std::list<COutputEntry> listSent;
+    std::list<COutputEntry> listStaked;
+    CAmount nFee;
+    std::string strSentAccount;
+    
+    wtx.GetAmounts(listReceived, listSent, listStaked, nFee, strSentAccount, watchonly);
+    bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
+    
+    UniValue reverseRet(UniValue::VARR);
+    
+    // common to every type of transaction
+    UniValue entry(UniValue::VOBJ);
+    entry.push_back(Pair("account", strSentAccount));
+    entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+    entry.push_back(Pair("abandoned", wtx.isAbandoned()));
+    WalletTxToJSON(wtx, entry);
+    CAmount amount = 0;
+    
+    // sent
+    if (!listSent.empty()) {
+        entry.push_back(Pair("category", "send"));
+        UniValue outputs(UniValue::VARR);
+        for (const COutputEntry& s : listSent) {
+            UniValue output(UniValue::VOBJ);
+            MaybePushAddress(output, s.destination);
+            if (involvesWatchonly || (s.ismine & ISMINE_WATCH_ONLY)) {
+                output.push_back(Pair("involvesWatchonly", true));
+            }
+            if (s.destStake.type() != typeid(CNoDestination)) {
+                output.push_back(Pair("coldstake_address", CBitcoinAddress(s.destStake).ToString()));
+            }
+            output.push_back(Pair("amount", ValueFromAmount(-s.amount)));
+            amount -= s.amount;
+            if (pwallet->mapAddressBook.count(s.destination)) {
+                output.push_back(Pair("label", pwallet->mapAddressBook[s.destination].name));
+            }
+            output.push_back(Pair("vout", s.vout));
+            outputs.push_back(output);
+        }
+        entry.push_back(Pair("outputs", outputs));
+    }
+    
+    // received
+    if (!listReceived.empty()) {
+    }
+    
+    entry.push_back(Pair("amount", ValueFromAmount(amount)));
+    reverseRet.push_back(entry);
+    
+    // TODO: replace with push_fronts
+    for (size_t i = reverseRet.size(); i-- > 0;) {
+        ret.push_back(reverseRet[i]);
+    }
+}
+
 UniValue filtertransactions(const JSONRPCRequest &request)
 {
-    CHDWallet *pwallet = GetHDWalletForJSONRPCRequest(request);
+    CHDWallet * const pwallet = GetHDWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp))
         return NullUniValue;
     
-    if (request.fHelp || request.params.size() > 2)
+    if (request.fHelp || request.params.size() > 5)
         throw std::runtime_error(
-            "filtertransactions [offset] [count]\n"
+            "filtertransactions [count:10] [skip:0] [include_watchonly:false] [search:''] [category:'all']\n"
             "List transactions.");
     
-    throw std::runtime_error("TODO");
+    LOCK2(cs_main, pwallet->cs_wallet);
+    
+    int count = 10;
+    if (!request.params[0].isNull()) {
+        RPCTypeCheckArgument(request.params[0], UniValue::VNUM);
+        count = request.params[0].get_int();
+        if (count < 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid count: %i.", count));
+        }
+    }
+    int skip = 0;
+    if (!request.params[1].isNull()) {
+        RPCTypeCheckArgument(request.params[1], UniValue::VNUM);
+        skip = request.params[1].get_int();
+        if (skip < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid skip number: %i.", skip));
+        }
+    }
+    isminefilter watchonly = ISMINE_SPENDABLE;
+    if (!request.params[2].isNull()) {
+        RPCTypeCheckArgument(request.params[2], UniValue::VBOOL);
+        if (request.params[2].get_bool()) {
+            watchonly = watchonly | ISMINE_WATCH_ONLY;
+        }
+    }
+    std::string search = "";
+    if (!request.params[3].isNull()) {
+        RPCTypeCheckArgument(request.params[3], UniValue::VSTR);
+        search = request.params[3].get_str();
+    }
+    std::string category = "all";
+    if (!request.params[4].isNull()) {
+        RPCTypeCheckArgument(request.params[4], UniValue::VSTR);
+        // TODO: check category validity
+        // received, sent, staked
+        // orpan_stake, coinbase, orphan and immature
+        category = request.params[4].get_str();
+    }
     
     UniValue result(UniValue::VARR);
+    
+    const CHDWallet::TxItems &txOrdered = pwallet->wtxOrdered;
+    
+    CWallet::TxItems::const_reverse_iterator it = txOrdered.rbegin();
+    for (; it != txOrdered.rend(); it++) {
+        CWalletTx * const pwtx = (*it).second.first;
+        if (pwtx != NULL) {
+            ListTransactions(pwallet, *pwtx, result, watchonly);
+        }
+    }
     
     return result;
 }
@@ -2679,7 +2831,7 @@ public:
     bool operator() (
         const std::map<CTxDestination, CAddressBookData>::iterator a,
         const std::map<CTxDestination, CAddressBookData>::iterator b) const
-    { 
+    {
         switch (nSortCode)
         {
             case SRT_LABEL_DESC:
@@ -3993,7 +4145,7 @@ static std::string SendHelp(CHDWallet *pwallet, OutputTypes typeIn, OutputTypes 
             "7. ringsize        (int, optional).\n"
             "8. inputs_per_sig  (int, optional).\n";
     
-    rv +=   
+    rv +=
             "\nResult:\n"
             "\"txid\"           (string) The transaction id.\n";
     
@@ -4458,7 +4610,7 @@ UniValue rewindchain(const JSONRPCRequest &request)
             result.pushKV("ReadBlockFromDisk failed", pindex->GetBlockHash().ToString());
             break;
         };
-        if (DISCONNECT_OK != DisconnectBlock(block, pindex, view)) 
+        if (DISCONNECT_OK != DisconnectBlock(block, pindex, view))
         {
             result.pushKV("DisconnectBlock failed", pindex->GetBlockHash().ToString());
             break;
