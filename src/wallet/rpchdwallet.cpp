@@ -24,6 +24,7 @@
 #include "wallet/hdwallet.h"
 #include "wallet/hdwalletdb.h"
 #include "wallet/coincontrol.h"
+#include "wallet/rpcwallet.h"
 #include "chainparams.h"
 #include "key/mnemonic.h"
 #include "pos/miner.h"
@@ -2647,41 +2648,6 @@ UniValue clearwallettransactions(const JSONRPCRequest &request)
     return result;
 }
 
-static void WalletTxToJSON(CWalletTx& wtx, UniValue& entry)
-{
-    int confirms = wtx.GetDepthInMainChain();
-    entry.push_back(Pair("confirmations", confirms));
-    if (wtx.IsCoinBase())
-        entry.push_back(Pair("generated", true));
-    if (confirms > 0)
-    {
-        entry.push_back(Pair("blockhash", wtx.hashBlock.GetHex()));
-        entry.push_back(Pair("blockindex", wtx.nIndex));
-        PushTime(entry, "blocktime", mapBlockIndex[wtx.hashBlock]->GetBlockTime());
-    } else {
-        entry.push_back(Pair("trusted", wtx.IsTrusted()));
-    }
-    uint256 hash = wtx.GetHash();
-    entry.push_back(Pair("txid", hash.GetHex()));
-    PushTime(entry, "time", wtx.GetTxTime());
-    PushTime(entry, "timereceived", wtx.nTimeReceived);
-
-    // Add opt-in RBF status
-    std::string rbfStatus = "no";
-    if (confirms <= 0) {
-        LOCK(mempool.cs);
-        RBFTransactionState rbfState = IsRBFOptIn(wtx, mempool);
-        if (rbfState == RBF_TRANSACTIONSTATE_UNKNOWN)
-            rbfStatus = "unknown";
-        else if (rbfState == RBF_TRANSACTIONSTATE_REPLACEABLE_BIP125)
-            rbfStatus = "yes";
-    }
-    entry.push_back(Pair("bip125_replaceable", rbfStatus));
-
-    for (const std::pair<std::string, std::string>& item : wtx.mapValue)
-        entry.push_back(Pair(item.first, item.second));
-}
-
 static bool ParseOutput(
     UniValue &                 output,
     const COutputEntry &       o,
@@ -2712,19 +2678,6 @@ static bool ParseOutput(
     output.push_back(Pair("vout", o.vout));
     amounts.push_back(std::to_string(o.amount));
     return true;
-}
-
-static bool IsChange(
-    const COutputEntry & o,
-    CWalletTx &          wtx,
-    CHDWallet * const    pwallet
-) {
-    if (o.destination.type() == typeid(CKeyID) && o.ismine & ISMINE_SPENDABLE) {
-        if (!pwallet->mapAddressBook.count(o.destination)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 static void ParseOutputs(
@@ -2765,54 +2718,6 @@ static void ParseOutputs(
     WalletTxToJSON(wtx, entry);
     CAmount amount = 0;
 
-    // sent
-    if (!listSent.empty()) {
-        entry.push_back(Pair("category", "send"));
-        entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
-        for (const auto &s : listSent) {
-            UniValue output(UniValue::VOBJ);
-            if (!ParseOutput(output, s, pwallet, watchonly, addresses, amounts)) {
-                return ;
-            }
-            output.push_back(Pair("amount", ValueFromAmount(-s.amount)));
-            amount -= s.amount;
-            outputs.push_back(output);
-        }
-    }
-
-    // received
-    if (!listReceived.empty()) {
-        bool isChange = false;
-        for (const auto &r : listReceived) {
-            UniValue output(UniValue::VOBJ);
-            if (!ParseOutput(output, r, pwallet, watchonly, addresses, amounts)) {
-                return ;
-            }
-            if (r.destination.type() == typeid(CKeyID)) {
-                CStealthAddress sx;
-                CKeyID idK = boost::get<CKeyID>(r.destination);
-                if (pwallet->GetStealthLinked(idK, sx)) {
-                    output.push_back(Pair("stealth_address", sx.Encoded()));
-                }
-            }
-            output.push_back(Pair("amount", ValueFromAmount(r.amount)));
-            amount += r.amount;
-            outputs.push_back(output);
-            isChange = isChange ? true : IsChange(r, wtx, pwallet);
-        }
-        if (wtx.IsCoinBase()) {
-            if (wtx.GetDepthInMainChain() < 1) {
-                entry.push_back(Pair("category", "orphan"));
-            } else if (wtx.GetBlocksToMaturity() > 0) {
-                entry.push_back(Pair("category", "immature"));
-            } else {
-                entry.push_back(Pair("category", "coinbase"));
-            }
-        } else if (!isChange) {
-            entry.push_back(Pair("category", "receive"));
-        }
-    }
-
     // staked
     if (!listStaked.empty()) {
         if (wtx.GetDepthInMainChain() < 1) {
@@ -2829,7 +2734,71 @@ static void ParseOutputs(
             outputs.push_back(output);
         }
         amount += -nFee;
-    }
+    } else {
+
+        // sent
+        if (!listSent.empty()) {
+            entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+            for (const auto &s : listSent) {
+                UniValue output(UniValue::VOBJ);
+                if (!ParseOutput(output, s, pwallet, watchonly, addresses, amounts)) {
+                    return ;
+                }
+                output.push_back(Pair("amount", ValueFromAmount(-s.amount)));
+                amount -= s.amount;
+                outputs.push_back(output);
+            }
+        }
+
+        // received
+        if (!listReceived.empty()) {
+            for (const auto &r : listReceived) {
+                UniValue output(UniValue::VOBJ);
+                if (!ParseOutput(output, r, pwallet, watchonly, addresses, amounts)) {
+                    return ;
+                }
+                if (r.destination.type() == typeid(CKeyID)) {
+                    CStealthAddress sx;
+                    CKeyID idK = boost::get<CKeyID>(r.destination);
+                    if (pwallet->GetStealthLinked(idK, sx)) {
+                        output.push_back(Pair("stealth_address", sx.Encoded()));
+                    }
+                }
+                output.push_back(Pair("amount", ValueFromAmount(r.amount)));
+                amount += r.amount;
+
+                bool fExists = false;
+                for (size_t i = 0; i < outputs.size(); ++i)
+                {
+                    auto &o = outputs.get(i);
+                    if (o["vout"].get_int() == r.vout)
+                    {
+                        o.push_back(Pair("send_to_self", true));
+                        o.get("amount").setStr(part::AmountToString(r.amount));
+                        fExists = true;
+                    }
+                }
+                if (!fExists)
+                    outputs.push_back(output);
+            }
+        }
+
+        if (wtx.IsCoinBase()) {
+            if (wtx.GetDepthInMainChain() < 1) {
+                entry.push_back(Pair("category", "orphan"));
+            } else if (wtx.GetBlocksToMaturity() > 0) {
+                entry.push_back(Pair("category", "immature"));
+            } else {
+                entry.push_back(Pair("category", "coinbase"));
+            }
+        } else if (!nFee) {
+            entry.push_back(Pair("category", "receive"));
+        } else
+        if (amount == 0)
+            entry.push_back(Pair("category", "internal_transfer"));
+        else
+            entry.push_back(Pair("category", "send"));
+    };
 
     entry.push_back(Pair("outputs", outputs));
     entry.push_back(Pair("amount", ValueFromAmount(amount)));
@@ -3154,24 +3123,19 @@ UniValue filtertransactions(const JSONRPCRequest &request)
         );
         rit++;
     }
-
+    
+    std::cout << sort << std::endl;
+    
     // sort
     std::vector<UniValue> values = transactions.getValues();
     std::sort(values.begin(), values.end(), [sort] (UniValue a, UniValue b) -> bool {
-        std::cout << a.write() << std::endl;
-        std::cout << b.write() << std::endl;
-        std::cout
-            << a["category"].type()
-            << b["category"].type()
-            << a["outputs"][0][sort].type()
-            << b["outputs"][0][sort].type()
-            << std::endl;
         double a_amount = a["category"].get_str() == "send"
             ? -(a["amount"].get_real())
             :   a["amount"].get_real();
         double b_amount = b["category"].get_str() == "send"
             ? -(b["amount"].get_real())
             :   b["amount"].get_real();
+        std::cout << a["txid"].get_str() << std::endl;
         return (
               sort == "address"
                 ? a["outputs"][0][sort].get_str() < b["outputs"][0][sort].get_str()
@@ -3184,11 +3148,10 @@ UniValue filtertransactions(const JSONRPCRequest &request)
             : false
         );
     });
-
+    
     // count and skip
     UniValue result(UniValue::VARR);
     for (unsigned int i = 0; i < values.size() && count > 0; i++) {
-        std::cout << values[i].write() << std::endl;
         if (values[i]["category"].get_str() == category || category == "all") {
             if (skip-- <= 0) {
                 result.push_back(values[i]);

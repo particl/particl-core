@@ -5,10 +5,14 @@
 #ifndef BITCOIN_WALLET_RPCWALLET_H
 #define BITCOIN_WALLET_RPCWALLET_H
 
+
 class CRPCTable;
+class UniValue;
+class CWalletTx;
 class JSONRPCRequest;
 
 void RegisterWalletRPCCommands(CRPCTable &t);
+void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry);
 
 /**
  * Figures out what wallet, if any, to use for a JSONRPCRequest.
