@@ -61,12 +61,12 @@ class FilterTransactionsTest(ParticlTestFramework):
 
         # PART to ANON
         nodes[0].sendparttoanon(
-            selfStealth,          # address
+            targetStealth,        # address
             20,                   # amount
             '',                   # ?
             '',                   # ?
             False,                # substract fee
-            'node0 -> node0 p->a' # narrative
+            'node0 -> node1 p->a' # narrative
         )
 
         # several outputs
@@ -136,13 +136,15 @@ class FilterTransactionsTest(ParticlTestFramework):
         self.stakeBlocks(1)
         self.sync_all()
         
+        # ro = nodes[0].filtertransactions({'count': 20})
+        # print(json.dumps(ro, indent=4, default=self.jsonDecimal))
+
         #
         # general
         #
-
+        
         # without argument
         ro = nodes[0].filtertransactions()
-        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
         assert(len(ro) == 10)
         
         # too much arguments
@@ -197,7 +199,7 @@ class FilterTransactionsTest(ParticlTestFramework):
 
         # skip: 1
         ro = nodes[0].filtertransactions({ 'category': 'send', 'skip': 1 })
-        assert(float(ro[0]['amount']) == -10.0)
+        assert(float(ro[0]['amount']) == -20.0)
 
         #
         # include_watchonly
@@ -214,7 +216,7 @@ class FilterTransactionsTest(ParticlTestFramework):
 
         queries = [
             [targetAddress, 2],
-            [selfStealth,   2],
+            [selfStealth,   1],
             ['70000',       1]
         ]
 
@@ -231,9 +233,9 @@ class FilterTransactionsTest(ParticlTestFramework):
         # 'orphaned_stake' transactions
 
         categories = [
-            ['internal_transfer', 5],
+            ['internal_transfer', 4],
             ['coinbase',          1],
-            ['send',              2],
+            ['send',              3],
             ['receive',           1],
             ['stake',             0]
         ]
@@ -274,15 +276,16 @@ class FilterTransactionsTest(ParticlTestFramework):
             ro = nodes[0].filtertransactions({ 'sort': sorting[0] })
             prev = None
             for t in ro:
-                if prev is None:
-                    prev = t
-                    continue
-                print(sorting[0])
-                print(json.dumps(t, indent=4, default=self.jsonDecimal))
-                if sorting[1] == 'asc':
-                    assert(t[sorting[0]] >= prev[sorting[0]])
-                if sorting[1] == 'desc':
-                    assert(t[sorting[0]] <= prev[sorting[0]])
+                if "address" not in t:
+                    t["address"] = t["outputs"][0]["address"]
+                if t["amount"] < 0:
+                    t["amount"] = -t["amount"]
+                if prev is not None:
+                    if sorting[1] == 'asc':
+                        assert(t[sorting[0]] >= prev[sorting[0]])
+                    if sorting[1] == 'desc':
+                        assert(t[sorting[0]] <= prev[sorting[0]])
+                prev = t
 
         # invalid sort
         try:
