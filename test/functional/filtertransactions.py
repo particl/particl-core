@@ -136,8 +136,11 @@ class FilterTransactionsTest(ParticlTestFramework):
         self.stakeBlocks(1)
         self.sync_all()
         
-        # ro = nodes[0].filtertransactions({'count': 20})
-        # print(json.dumps(ro, indent=4, default=self.jsonDecimal))
+        ro = nodes[0].filtertransactions({'count': 20, 'type': 'anon'})
+        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
+        ro = nodes[0].filtertransactions({'count': 20, 'type': 'blind'})
+        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
+        return
 
         #
         # general
