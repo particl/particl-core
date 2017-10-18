@@ -136,8 +136,8 @@ class FilterTransactionsTest(ParticlTestFramework):
         self.stakeBlocks(1)
         self.sync_all()
         
-        # ro = nodes[0].filtertransactions({'count': 20})
-        # print(json.dumps(ro, indent=4, default=self.jsonDecimal))
+        ro = nodes[0].filtertransactions({'count': 20})
+        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
 
         #
         # general
@@ -198,7 +198,11 @@ class FilterTransactionsTest(ParticlTestFramework):
         assert(len(ro) == 1)
 
         # skip: 1
-        ro = nodes[0].filtertransactions({ 'category': 'send', 'skip': 1 })
+        ro = nodes[0].filtertransactions({
+            'category': 'send',
+            'count':    20,
+            'skip':     1
+        })
         assert(float(ro[0]['amount']) == -20.0)
 
         #
