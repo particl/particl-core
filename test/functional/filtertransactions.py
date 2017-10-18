@@ -136,11 +136,8 @@ class FilterTransactionsTest(ParticlTestFramework):
         self.stakeBlocks(1)
         self.sync_all()
         
-        ro = nodes[0].filtertransactions({'count': 20, 'type': 'anon'})
-        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
-        ro = nodes[0].filtertransactions({'count': 20, 'type': 'blind'})
-        print(json.dumps(ro, indent=4, default=self.jsonDecimal))
-        return
+        # ro = nodes[0].filtertransactions({'count': 20})
+        # print(json.dumps(ro, indent=4, default=self.jsonDecimal))
 
         #
         # general
@@ -311,7 +308,11 @@ class FilterTransactionsTest(ParticlTestFramework):
             ro = nodes[0].filtertransactions({ 'sort': sorting[0] })
             prev = None
             for t in ro:
-                if "address" not in t:
+                if "address" not in t and "stealth_address" in t:
+                    t["address"] = t["stealth_address"]
+                if "address" not in t and "stealth_address" in t["outputs"][0]:
+                    t["address"] = t["outputs"][0]["stealth_address"]
+                if "address" not in t and "address" in t["outputs"][0]:
                     t["address"] = t["outputs"][0]["address"]
                 if t["amount"] < 0:
                     t["amount"] = -t["amount"]

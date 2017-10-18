@@ -2839,23 +2839,16 @@ static void ParseRecords(
     const isminefilter &       watchonly_filter,
     std::string                search
 ) {
-    UniValue entry(UniValue::VOBJ);
+    std::vector<std::string> addresses;
+    std::vector<std::string> amounts;
+    UniValue   entry(UniValue::VOBJ);
     UniValue outputs(UniValue::VARR);
+    size_t  nOwned      = 0;
+    size_t  nFrom       = 0;
     CAmount totalAmount = 0;
     
     push(entry, "txid", hash.ToString());
     PushTime(entry, "time", rtx.nTimeReceived);
-    
-    std::cout << hash.ToString() << std::endl;
-    std::cout << (rtx.nFlags & ORF_FROM) << std::endl;
-
-    if (rtx.nFlags & ORF_OWNED && rtx.nFlags & ORF_FROM) {
-        push(entry, "category", "internal_transfer");
-    } else if (rtx.nFlags & ORF_OWNED) {
-        push(entry, "category", "receive");
-    } else if (rtx.nFlags & ORF_FROM) {
-        push(entry, "category", "send");
-    }
     
     int confirmations = pwallet->GetDepthInMainChain(rtx.blockHash);
     push(entry, "confirmations", confirmations);
@@ -2873,7 +2866,12 @@ static void ParseRecords(
     for (const auto &conflict : setconflicts) {
         conflicts.push_back(conflict.GetHex());
     }
-    push(entry, "walletconflicts", conflicts);
+    if (conflicts.size() > 0) {
+        push(entry, "walletconflicts", conflicts);
+    }
+    if (rtx.nFlags & ORF_LOCKED) {
+        push(entry, "require_unlock", "true");
+    }
     
     for (auto &record : rtx.vout) {
         
@@ -2882,14 +2880,19 @@ static void ParseRecords(
         if (record.nFlags & ORF_CHANGE) {
             continue ;
         }
+        if (record.nFlags & ORF_OWNED) {
+            nOwned++;
+        }
+        if (record.nFlags & ORF_FROM) {
+            nFrom++;
+        }
 
         CBitcoinAddress addr;
         CTxDestination  dest;
         bool extracted = ExtractDestination(record.scriptPubKey, dest);
 
         // get account name
-        if (extracted && !record.scriptPubKey.IsUnspendable())
-        {
+        if (extracted && !record.scriptPubKey.IsUnspendable()) {
             addr.Set(dest);
             std::map<CTxDestination, CAddressBookData>::iterator mai;
             mai = pwallet->mapAddressBook.find(dest);
@@ -2909,6 +2912,7 @@ static void ParseRecords(
                     memcpy(&sidx, &record.vPath[1], 4);
                     if (pwallet->GetStealthByIndex(sidx, sx)) {
                         push(output, "stealth_address", sx.Encoded());
+                        addresses.push_back(sx.Encoded());
                     }
                 }
             }
@@ -2917,6 +2921,7 @@ static void ParseRecords(
                 CKeyID idK = boost::get<CKeyID>(dest);
                 if (pwallet->GetStealthLinked(idK, sx)) {
                     push(output, "stealth_address", sx.Encoded());
+                    addresses.push_back(sx.Encoded());
                 }
             }
         }
@@ -2925,6 +2930,7 @@ static void ParseRecords(
             push(output, "address", "none");
         } else {
             push(output, "address", addr.ToString());
+            addresses.push_back(addr.ToString());
         }
 
         push(output, "type",
@@ -2933,20 +2939,8 @@ static void ParseRecords(
             : record.nType == OUTPUT_RINGCT   ? "anon"
             : "unknown");
 
-        if (record.nFlags & ORF_OWNED && record.nFlags & ORF_FROM) {
-            push(output, "fromself", "true");
-        }
-        if (record.nFlags & ORF_LOCKED) {
-            push(output, "require_unlock", "true");
-        }
         if (!record.sNarration.empty()) {
             push(output, "narration", record.sNarration);
-        }
-        if (record.nFlags & ORF_FROM) {
-            push(output, "fee", ValueFromAmount(-rtx.nFee));
-        }
-        if (record.nFlags & ORF_FROM) {
-            push(output, "abandoned", rtx.IsAbandoned());
         }
         
         CAmount amount = record.nValue;
@@ -2955,24 +2949,43 @@ static void ParseRecords(
         }
         totalAmount += amount;
         push(output, "amount", ValueFromAmount(amount));
+        amounts.push_back(std::to_string(ValueFromAmount(amount).get_real()));
         push(output, "vout", record.n);
         outputs.push_back(output);
     }
     
+    if (nOwned && nFrom) {
+        push(entry, "category", "internal_transfer");
+    } else if (nOwned) {
+        push(entry, "category", "receive");
+    } else if (nFrom) {
+        push(entry, "category", "send");
+    }
+    
+    if (nFrom > 0) {
+        push(entry, "abandoned", rtx.IsAbandoned());
+        push(entry, "fee", ValueFromAmount(-rtx.nFee));
+    }
+    
     push(entry, "outputs", outputs);
     push(entry, "amount", ValueFromAmount(totalAmount));
+    amounts.push_back(std::to_string(ValueFromAmount(totalAmount).get_real()));
     
     if (search != "") {
-        std::string amount = std::to_string(entry["amount"].get_real());
-        std::string address = entry["address"].get_str();
-        if (entry["stealth_address"].getType() != 0) {
-            if (entry["stealth_address"].get_str().find(search) != std::string::npos) {
-                entries.push_back(entry);
-            }
-        } else if (address.find(search) != std::string::npos) {
+        // search in addresses
+        if (std::any_of(addresses.begin(), addresses.end(), [search](std::string addr) {
+            return addr.find(search) != std::string::npos;
+        })) {
             entries.push_back(entry);
-        } else if (amount.find(search) != std::string::npos) {
+            return ;
+        }
+        // search in amounts
+        // character DOT '.' is not searched for: search "123" will find 1.23 and 12.3
+        if (std::any_of(amounts.begin(), amounts.end(), [search](std::string amount) {
+            return amount.find(search) != std::string::npos;
+        })) {
             entries.push_back(entry);
+            return ;
         }
     } else {
         entries.push_back(entry);
@@ -3192,19 +3205,14 @@ UniValue filtertransactions(const JSONRPCRequest &request)
     // sort
     std::vector<UniValue> values = transactions.getValues();
     std::sort(values.begin(), values.end(), [sort] (UniValue a, UniValue b) -> bool {
-        std::cout << a.write() << std::endl;
-        std::cout << b.write() << std::endl;
         double a_amount = a["category"].get_str() == "send"
             ? -(a["amount"].get_real())
             :   a["amount"].get_real();
         double b_amount = b["category"].get_str() == "send"
             ? -(b["amount"].get_real())
             :   b["amount"].get_real();
-        std::cout << "test" << std::endl;
         std::string a_address = getAddress(a);
         std::string b_address = getAddress(b);
-        std::cout << a_address << std::endl;
-        std::cout << b_address << std::endl;
         return (
               sort == "address"
                 ? a_address < b_address
