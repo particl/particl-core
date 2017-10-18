@@ -107,7 +107,7 @@ class FilterTransactionsTest(ParticlTestFramework):
                 }
             ]
         )
-        txid = nodes[0].sendtoaddress(selfSpending, 100)
+        txid = nodes[0].sendtoaddress(selfSpending, 50)
         nodes[0].sendtypeto(
             'part',              # type in
             'part',              # type out
