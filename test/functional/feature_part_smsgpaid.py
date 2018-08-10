@@ -130,8 +130,8 @@ class SmsgPaidTest(ParticlTestFramework):
             except Exception as e:
                 time.sleep(1)
         assert(ro['text'] == text_3)
-        assert(ro['addressfrom'] == address1)
-        assert(ro['addressto'] == address0_1)
+        assert(ro['from'] == address1)
+        assert(ro['to'] == address0_1)
 
         ro = nodes[0].walletpassphrase("qwerty234", 300)
         ro = nodes[0].smsginbox()

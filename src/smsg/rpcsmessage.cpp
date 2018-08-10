@@ -1446,16 +1446,17 @@ static UniValue smsgone(const JSONRPCRequest &request)
             "\nResult:\n"
             "{\n"
             "  \"msgid\": \"...\"                    (string) The message identifier\n"
+            "  \"version\": \"str\"                  (string) The message version\n"
             "  \"location\": \"str\"                 (string) inbox|outbox|sending\n"
-            "  \"timereceived\": int               (int) Time the message was received\n"
-            "  \"addressto\": \"str\"                (string) Address the message was sent to\n"
-            "  \"read\": bool                      (bool) Read status\n"
-            "  \"timesent\": int                   (int) Time the message was created\n"
-            "  \"paid\": bool                      (bool) Paid or free message\n"
-            "  \"daysretention\": int              (int) Number of days message will stay in the network for\n"
-            "  \"timeexpired\": int                (int) Time the message will be dropped from the network\n"
-            "  \"payloadsize\": int                (int) Size of user message\n"
-            "  \"addressfrom\": \"str\"              (string) Address the message was sent from\n"
+            "  \"received\": int                     (int) Time the message was received\n"
+            "  \"to\": \"str\"                       (string) Address the message was sent to\n"
+            "  \"read\": bool                        (bool) Read status\n"
+            "  \"sent\": int                         (int) Time the message was created\n"
+            "  \"paid\": bool                        (bool) Paid or free message\n"
+            "  \"daysretention\": int                (int) Number of days message will stay in the network for\n"
+            "  \"expiration\": int                   (int) Time the message will be dropped from the network\n"
+            "  \"payloadsize\": int                  (int) Size of user message\n"
+            "  \"from\": \"str\"                     (string) Address the message was sent from\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("smsg", "\"msgid\"")
@@ -1528,21 +1529,23 @@ static UniValue smsgone(const JSONRPCRequest &request)
         };
     }
 
+    const smsg::SecureMessage *psmsg = (smsg::SecureMessage*) &smsgStored.vchMessage[0];
+
     result.pushKV("msgid", sMsgId);
+    result.pushKV("version", strprintf("%02x%02x", psmsg->version[0], psmsg->version[1]));
     result.pushKV("location", sType);
-    PushTime(result, "timereceived", smsgStored.timeReceived);
-    result.pushKV("addressto", CBitcoinAddress(smsgStored.addrTo).ToString());
+    PushTime(result, "received", smsgStored.timeReceived);
+    result.pushKV("to", CBitcoinAddress(smsgStored.addrTo).ToString());
     //result.pushKV("addressoutbox", CBitcoinAddress(smsgStored.addrOutbox).ToString());
     result.pushKV("read", UniValue(bool(!(smsgStored.status & SMSG_MASK_UNREAD))));
 
-    const smsg::SecureMessage *psmsg = (smsg::SecureMessage*) &smsgStored.vchMessage[0];
-    PushTime(result, "timesent", psmsg->timestamp);
+    PushTime(result, "sent", psmsg->timestamp);
     result.pushKV("paid", UniValue(psmsg->IsPaidVersion()));
 
     uint32_t nDaysRetention = psmsg->IsPaidVersion() ? psmsg->nonce[0] : 2;
     int64_t ttl = smsg::SMSGGetSecondsInDay() * nDaysRetention;
     result.pushKV("daysretention", (int)nDaysRetention);
-    PushTime(result, "timeexpired", psmsg->timestamp + ttl);
+    PushTime(result, "expiration", psmsg->timestamp + ttl);
 
 
     smsg::MessageData msg;
@@ -1558,7 +1561,7 @@ static UniValue smsgone(const JSONRPCRequest &request)
     if ((rv = smsgModule.Decrypt(false, fInbox ? smsgStored.addrTo : smsgStored.addrOutbox,
         &smsgStored.vchMessage[0], &smsgStored.vchMessage[smsg::SMSG_HDR_LEN], nPayload, msg)) == 0)
     {
-        result.pushKV("addressfrom", msg.sFromAddress);
+        result.pushKV("from", msg.sFromAddress);
 
         if (sEnc == "")
         {
