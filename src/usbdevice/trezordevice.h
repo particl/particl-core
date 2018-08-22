@@ -20,6 +20,16 @@ public:
 
     int GetFirmwareVersion(std::string &sFirmware, std::string &sError) override;
 
+    int GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError) override;
+    int GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, std::string &sError) override;
+
+    int SignMessage(const std::vector<uint32_t> &vPath, const std::string &sMessage, std::vector<uint8_t> &vchSig, std::string &sError) override;
+
+    int PrepareTransaction(const CMutableTransaction *tx, const CCoinsViewCache &view) override;
+
+    int SignTransaction(const std::vector<uint32_t> &vPath, const std::vector<uint8_t> &vSharedSecret, const CMutableTransaction *tx,
+        int nIn, const CScript &scriptCode, int hashType, const std::vector<uint8_t> &amount, SigVersion sigversion,
+        std::vector<uint8_t> &vchSig, std::string &sError) override;
 };
 
 } // usb_device
