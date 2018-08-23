@@ -541,18 +541,6 @@ UniValue runstrings(const JSONRPCRequest& request)
     return rv;
 }
 
-static UniValue getinfo_deprecated(const JSONRPCRequest& request)
-{
-    throw JSONRPCError(RPC_METHOD_NOT_FOUND,
-        "getinfo\n"
-        "\nThis call was removed in version 0.16.0. Use the appropriate fields from:\n"
-        "- getblockchaininfo: blocks, difficulty, chain\n"
-        "- getnetworkinfo: version, protocolversion, timeoffset, connections, proxy, relayfee, warnings\n"
-        "- getwalletinfo: balance, keypoololdest, keypoolsize, paytxfee, unlocked_until, walletversion\n"
-        "\nparticl-cli has the option -getinfo to collect and format these in the old format."
-    );
-}
-
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
@@ -567,7 +555,6 @@ static const CRPCCommand commands[] =
     { "hidden",             "setmocktime",            &setmocktime,            {"timestamp","is_offset"}},
     { "hidden",             "echo",                   &echo,                   {"arg0","arg1","arg2","arg3","arg4","arg5","arg6","arg7","arg8","arg9"}},
     { "hidden",             "echojson",               &echo,                   {"arg0","arg1","arg2","arg3","arg4","arg5","arg6","arg7","arg8","arg9"}},
-    { "hidden",             "getinfo",                &getinfo_deprecated,     {}},
     { "hidden",             "runstrings",             &runstrings,             {"arg0","arg1","arg2","arg3","arg4","arg5","arg6","arg7","arg8","arg9"}},
 };
 

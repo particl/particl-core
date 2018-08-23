@@ -32,10 +32,10 @@ MnemonicDialog::MnemonicDialog(QWidget *parent, WalletModel *wm) :
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
     ui->setupUi(this);
 
-    QObject::connect(ui->btnCancel2, SIGNAL(clicked()), this, SLOT(on_btnCancel_clicked()));
-    QObject::connect(ui->btnCancel3, SIGNAL(clicked()), this, SLOT(on_btnCancel_clicked()));
+    QObject::connect(ui->btnCancel2, &QPushButton::clicked, this, &MnemonicDialog::on_btnCancel_clicked);
+    QObject::connect(ui->btnCancel3, &QPushButton::clicked, this, &MnemonicDialog::on_btnCancel_clicked);
 
-    QObject::connect(this, SIGNAL(startRescan()), walletModel, SLOT(startRescan()), Qt::QueuedConnection);
+    QObject::connect(this, &MnemonicDialog::startRescan, walletModel, &WalletModel::startRescan, Qt::QueuedConnection);
 
     setWindowTitle(QString("HD Wallet Setup - %1").arg(QString::fromStdString(wm->wallet().getWalletName())));
     ui->edtPath->setPlaceholderText(tr("Path to derive account from, if not using default. (optional, default=%1)").arg(QString::fromStdString(GetDefaultAccountPath())));
@@ -138,7 +138,7 @@ void MnemonicDialog::on_btnImportFromHwd_clicked()
     setEnabled(false);
 
     m_thread = new RPCThread(sCommand, walletModel->getWalletName(), &m_rv);
-    connect(m_thread, SIGNAL(complete(bool)), this, SLOT(hwImportComplete(bool)));
+    connect(m_thread, &RPCThread::complete, this, &MnemonicDialog::hwImportComplete);
     m_thread->setObjectName("particl-hwImport");
     m_thread->start();
 

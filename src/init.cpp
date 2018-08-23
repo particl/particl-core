@@ -136,14 +136,13 @@ const char lpcszClassName[] = "messageClass";
 
 LRESULT APIENTRY MainWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    switch (uMsg)
-    {
+    switch (uMsg) {
         case WM_CLOSE:
             StartShutdown();
             return 1;
         default:
             break;
-    };
+    }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 };
 
@@ -158,18 +157,16 @@ int CreateMessageWindow()
     WindowClassEx.hInstance = nullptr;
     WindowClassEx.lpszClassName = lpcszClassName;
 
-    if (!RegisterClassEx(&WindowClassEx))
-    {
+    if (!RegisterClassEx(&WindowClassEx)) {
         fprintf(stderr, "RegisterClassEx failed: %d.\n", GetLastError());
         return 1;
-    };
+    }
 
     winHwnd = CreateWindowEx(0, lpcszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, nullptr, NULL);
-    if (!winHwnd)
-    {
+    if (!winHwnd) {
         fprintf(stderr, "CreateWindowEx failed: %d.\n", GetLastError());
         return 1;
-    };
+    }
 
     ShowWindow(winHwnd, SW_SHOWDEFAULT);
 
@@ -178,20 +175,19 @@ int CreateMessageWindow()
 
 int CloseMessageWindow()
 {
-    if (!winHwnd)
+    if (!winHwnd) {
         return 0;
+    }
 
-    if (!DestroyWindow(winHwnd))
-    {
+    if (!DestroyWindow(winHwnd)) {
         fprintf(stderr, "DestroyWindow failed: %d.\n", GetLastError());
         return 1;
-    };
+    }
 
-    if (!UnregisterClass(lpcszClassName, nullptr))
-    {
+    if (!UnregisterClass(lpcszClassName, nullptr)) {
         fprintf(stderr, "UnregisterClass failed: %d.\n", GetLastError());
         return 1;
-    };
+    }
 
     return 0;
 };
@@ -227,11 +223,10 @@ bool ShutdownRequestedMainThread()
 {
 #ifdef WIN32
     // Only particld will create a hidden window to receive messages
-    while (winHwnd && PeekMessage(&winMsg, 0, 0, 0, PM_REMOVE))
-    {
+    while (winHwnd && PeekMessage(&winMsg, 0, 0, 0, PM_REMOVE)) {
         TranslateMessage(&winMsg);
         DispatchMessage(&winMsg);
-    };
+    }
 #endif
     return ShutdownRequested();
 }

@@ -49,7 +49,7 @@ Q_SIGNALS:
     // Rescan blockchain for transactions
     void startRescan();
 
-private Q_SLOTS:
+public Q_SLOTS:
     void on_btnCancel_clicked();
     void on_btnImport_clicked();
     void on_btnGenerate_clicked();

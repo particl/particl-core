@@ -6,6 +6,7 @@ src/particld
 src/particl-cli
 src/particl-tx
 src/test/test_particl
+src/test/test_particl_fuzzy
 src/qt/test/test_particl-qt
 
 # autoreconf
@@ -122,3 +123,7 @@ test/cache/*
 
 libparticlconsensus.pc
 contrib/devtools/split-debug.sh
+
+
+.project
+.vscode

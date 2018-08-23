@@ -3641,8 +3641,16 @@ static UniValue settxfee(const JSONRPCRequest& request)
     LOCK2(cs_main, pwallet->cs_wallet);
 
     CAmount nAmount = AmountFromValue(request.params[0]);
+    CFeeRate tx_fee_rate(nAmount, 1000);
+    if (tx_fee_rate == 0) {
+        // automatic selection
+    } else if (tx_fee_rate < ::minRelayTxFee) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be less than min relay tx fee (%s)", ::minRelayTxFee.ToString()));
+    } else if (tx_fee_rate < pwallet->m_min_fee) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("txfee cannot be less than wallet min fee (%s)", pwallet->m_min_fee.ToString()));
+    }
 
-    pwallet->m_pay_tx_fee = CFeeRate(nAmount, 1000);
+    pwallet->m_pay_tx_fee = tx_fee_rate;
     return true;
 }
 
@@ -5423,10 +5431,11 @@ bool FillPSBT(const CWallet* pwallet, PartiallySignedTransaction& psbtx, const C
 
         // If we don't know about this input, skip it and let someone else deal with it
         const uint256& txhash = txin.prevout.hash;
-        const auto& it = pwallet->mapWallet.find(txhash);
+        const auto it = pwallet->mapWallet.find(txhash);
         if (it != pwallet->mapWallet.end()) {
             const CWalletTx& wtx = it->second;
             CTxOut utxo = wtx.tx->vout[txin.prevout.n];
+            // Update both UTXOs from the wallet.
             input.non_witness_utxo = wtx.tx;
             input.witness_utxo = utxo;
         }
@@ -5443,11 +5452,13 @@ bool FillPSBT(const CWallet* pwallet, PartiallySignedTransaction& psbtx, const C
             complete &= SignPSBTInput(PublicOnlySigningProvider(pwallet), *psbtx.tx, input, sigdata, i, sighash_type);
         }
 
-        // Drop the unnecessary UTXO
-        if (sigdata.witness) {
-            input.non_witness_utxo = nullptr;
-        } else {
-            input.witness_utxo.SetNull();
+        if (it != pwallet->mapWallet.end()) {
+            // Drop the unnecessary UTXO if we added both from the wallet.
+            if (sigdata.witness) {
+                input.non_witness_utxo = nullptr;
+            } else {
+                input.witness_utxo.SetNull();
+            }
         }
 
         // Get public key paths
@@ -5462,11 +5473,6 @@ bool FillPSBT(const CWallet* pwallet, PartiallySignedTransaction& psbtx, const C
     for (unsigned int i = 0; i < txConst->vout.size(); ++i) {
         const CTxOut& out = txConst->vout.at(i);
         PSBTOutput& psbt_out = psbtx.outputs.at(i);
-
-        // Dummy tx so we can use ProduceSignature to get stuff out
-        CMutableTransaction dummy_tx;
-        dummy_tx.vin.push_back(CTxIn());
-        dummy_tx.vout.push_back(CTxOut());
 
         // Fill a SignatureData with output info
         SignatureData sigdata;
@@ -5566,7 +5572,7 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
         return NullUniValue;
     }
 
-    if (request.fHelp || request.params.size() < 2 || request.params.size() > 6)
+    if (request.fHelp || request.params.size() < 2 || request.params.size() > 5)
         throw std::runtime_error(
                             "walletcreatefundedpsbt [{\"txid\":\"id\",\"vout\":n},...] [{\"address\":amount},{\"data\":\"hex\"},...] ( locktime ) ( replaceable ) ( options bip32derivs )\n"
                             "\nCreates and funds a transaction in the Partially Signed Transaction format. Inputs will be added if supplied inputs are not enough\n"
@@ -5593,9 +5599,8 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
                             "                             accepted as second parameter.\n"
                             "   ]\n"
                             "3. locktime                  (numeric, optional, default=0) Raw locktime. Non-0 value also locktime-activates inputs\n"
-                            "4. replaceable               (boolean, optional, default=false) Marks this transaction as BIP125 replaceable.\n"
                             "                             Allows this transaction to be replaced by a transaction with higher fees. If provided, it is an error if explicit sequence numbers are incompatible.\n"
-                            "5. options                 (object, optional)\n"
+                            "4. options                 (object, optional)\n"
                             "   {\n"
                             "     \"changeAddress\"          (string, optional, default pool address) The particl address to receive the change\n"
                             "     \"changePosition\"         (numeric, optional, default random) The index of the change output\n"
@@ -5617,7 +5622,7 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
                             "         \"ECONOMICAL\"\n"
                             "         \"CONSERVATIVE\"\n"
                             "   }\n"
-                            "6. bip32derivs                    (boolean, optiona, default=false) If true, includes the BIP 32 derivation paths for public keys if we know them\n"
+                            "5. bip32derivs                    (boolean, optiona, default=false) If true, includes the BIP 32 derivation paths for public keys if we know them\n"
                             "\nResult:\n"
                             "{\n"
                             "  \"psbt\": \"value\",        (string)  The resulting raw transaction (base64-encoded string)\n"
@@ -5633,15 +5638,15 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
         UniValue::VARR,
         UniValueType(), // ARR or OBJ, checked later
         UniValue::VNUM,
-        UniValue::VBOOL,
-        UniValue::VOBJ
+        UniValue::VOBJ,
+        UniValue::VBOOL
         }, true
     );
 
     CAmount fee;
     int change_position;
-    CMutableTransaction rawTx = ConstructTransaction(request.params[0], request.params[1], request.params[2], request.params[3]);
-    FundTransaction(pwallet, rawTx, fee, change_position, request.params[4]);
+    CMutableTransaction rawTx = ConstructTransaction(request.params[0], request.params[1], request.params[2], request.params[3]["replaceable"]);
+    FundTransaction(pwallet, rawTx, fee, change_position, request.params[3]);
 
     // Make a blank psbt
     PartiallySignedTransaction psbtx;
@@ -5658,7 +5663,7 @@ UniValue walletcreatefundedpsbt(const JSONRPCRequest& request)
     const CTransaction txConst(*psbtx.tx);
 
     // Fill transaction with out data but don't sign
-    bool bip32derivs = request.params[5].isNull() ? false : request.params[5].get_bool();
+    bool bip32derivs = request.params[4].isNull() ? false : request.params[5].get_bool();
     FillPSBT(pwallet, psbtx, &txConst, 1, false, bip32derivs);
 
     // Serialize the PSBT
@@ -5688,7 +5693,7 @@ static const CRPCCommand commands[] =
     //  --------------------- ------------------------          -----------------------         ----------
     { "rawtransactions",    "fundrawtransaction",               &fundrawtransaction,            {"hexstring","options","iswitness"} },
     { "wallet",             "walletprocesspsbt",                &walletprocesspsbt,             {"psbt","sign","sighashtype","bip32derivs"} },
-    { "wallet",             "walletcreatefundedpsbt",           &walletcreatefundedpsbt,        {"inputs","outputs","locktime","replaceable","options","bip32derivs"} },
+    { "wallet",             "walletcreatefundedpsbt",           &walletcreatefundedpsbt,        {"inputs","outputs","locktime","options","bip32derivs"} },
     { "hidden",             "resendwallettransactions",         &resendwallettransactions,      {} },
     { "wallet",             "abandontransaction",               &abandontransaction,            {"txid"} },
     { "wallet",             "abortrescan",                      &abortrescan,                   {} },

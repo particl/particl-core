@@ -187,8 +187,9 @@ static bool AppInit(int argc, char* argv[])
         }
 
 #ifdef WIN32
-        if (CreateMessageWindow() != 0)
+        if (CreateMessageWindow() != 0) {
             return false;
+        }
 #endif
 
         fRet = AppInitMain();

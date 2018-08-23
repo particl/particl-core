@@ -9,6 +9,8 @@
 #include <config/bitcoin-config.h>
 #endif
 
+#include <qt/optionsdialog.h>
+
 #include <amount.h>
 
 #include <QLabel>
@@ -45,6 +47,11 @@ class QComboBox;
 class QProgressBar;
 class QProgressDialog;
 QT_END_NAMESPACE
+
+namespace GUIUtil {
+class ClickableLabel;
+class ClickableProgressBar;
+}
 
 /**
   Bitcoin GUI main class. This class represents the main window of the Bitcoin UI. It communicates with both the client and
@@ -92,13 +99,13 @@ private:
     WalletFrame* walletFrame = nullptr;
 
     UnitDisplayStatusBarControl* unitDisplayControl = nullptr;
-    QLabel* labelWalletEncryptionIcon = nullptr;
+    GUIUtil::ClickableLabel* labelWalletEncryptionIcon = nullptr;
     QLabel* labelWalletHDStatusIcon = nullptr;
-    QLabel* labelProxyIcon = nullptr;
-    QLabel* connectionsControl = nullptr;
-    QLabel* labelBlocksIcon = nullptr;
+    GUIUtil::ClickableLabel* labelProxyIcon = nullptr;
+    GUIUtil::ClickableLabel* connectionsControl = nullptr;
+    GUIUtil::ClickableLabel* labelBlocksIcon = nullptr;
     QLabel* progressBarLabel = nullptr;
-    QProgressBar* progressBar = nullptr;
+    GUIUtil::ClickableProgressBar* progressBar = nullptr;
     QProgressDialog* progressDialog = nullptr;
 
     QMenuBar* appMenuBar = nullptr;
@@ -169,6 +176,9 @@ private:
 
     void updateHeadersSyncProgressLabel();
 
+    /** Open the OptionsDialog on the specified tab index */
+    void openOptionsDialogWithTab(OptionsDialog::Tab tab);
+
     QMessageBox mbDevice;
 
 Q_SIGNALS:
@@ -226,7 +236,7 @@ private:
     /** Set the proxy-enabled icon as shown in the UI. */
     void updateProxyIcon();
 
-private Q_SLOTS:
+public Q_SLOTS:
 #ifdef ENABLE_WALLET
     /** Switch to overview (home) page */
     void gotoOverviewPage();
@@ -270,7 +280,8 @@ private Q_SLOTS:
 #endif
 
     /** Show window if hidden, unminimize when minimized, rise when obscured or show if hidden and fToggleHidden is true */
-    void showNormalIfMinimized(bool fToggleHidden = false);
+    void showNormalIfMinimized() { showNormalIfMinimized(false); }
+    void showNormalIfMinimized(bool fToggleHidden);
     /** Simply calls showNormalIfMinimized(true) for use in SLOT() macro */
     void toggleHidden();
 
@@ -282,9 +293,6 @@ private Q_SLOTS:
 
     /** When hideTrayIcon setting is changed in OptionsModel hide or show the icon accordingly. */
     void setTrayIconVisible(bool);
-
-    /** Toggle networking */
-    void toggleNetworkActive();
 
     void showModalOverlay();
 };
