@@ -14,6 +14,7 @@
 #include <univalue.h>
 #include <chainparams.h>
 #include <validation.h>
+#include <compat/byteswap.h>
 
 #ifdef ENABLE_WALLET
 #include <wallet/hdwallet.h>
@@ -186,6 +187,10 @@ int CTrezorDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, st
     message::GetPublicKey msg_in;
     message::PublicKey msg_out;
 
+    for (const auto i : vPath) {
+        msg_in.add_address_n(i);
+    }
+
     std::vector<uint8_t> vec_in, vec_out;
 
     vec_in.resize(msg_in.ByteSize());
@@ -215,9 +220,9 @@ int CTrezorDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, st
         return errorN(1, sError, __func__, "ParseFromArray failed.");
     }
 
-
     size_t lenPubkey = msg_out.node().public_key().size();
     pk.Set(&msg_out.node().public_key().c_str()[0], &msg_out.node().public_key().c_str()[lenPubkey]);
+
     return 0;
 };
 
@@ -231,6 +236,10 @@ int CTrezorDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, 
     message::GetPublicKey msg_in;
     message::PublicKey msg_out;
 
+    for (const auto i : vPath) {
+        msg_in.add_address_n(i);
+    }
+
     std::vector<uint8_t> vec_in, vec_out;
 
     vec_in.resize(msg_in.ByteSize());
@@ -260,8 +269,16 @@ int CTrezorDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, 
         return errorN(1, sError, __func__, "ParseFromArray failed.");
     }
 
-    ekp.nDepth = lenPath;
-    ekp.nChild = vPath.back();
+    if (vPath.back() != msg_out.node().child_num() || lenPath != msg_out.node().depth()) {
+        return errorN(1, sError, __func__, "Mismatched key returned.");
+    }
+
+    ekp.nDepth = msg_out.node().depth();
+    uint32_t fingerprint = bswap_32(msg_out.node().fingerprint()); // bswap_32 still necessary when system is big endian?
+    memcpy(ekp.vchFingerprint, ((uint8_t*)&fingerprint), 4);
+    ekp.nChild = msg_out.node().child_num();
+    assert(msg_out.node().chain_code().size() == 32);
+    memcpy(ekp.chaincode, msg_out.node().chain_code().data(), 32);
 
     size_t lenPubkey = msg_out.node().public_key().size();
     ekp.pubkey.Set(&msg_out.node().public_key().c_str()[0], &msg_out.node().public_key().c_str()[lenPubkey]);
@@ -269,9 +286,6 @@ int CTrezorDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, 
     if (lenPubkey == 65 && !ekp.pubkey.Compress()) {
         return errorN(1, sError, __func__, "Pubkey compression failed.");
     }
-    //version[4] | depth[1] | parent_fingerprint[4] | index[4] | chain_code[32] | serialized_key[65]
-    memcpy(ekp.vchFingerprint, &msg_out.xpub().c_str()[5], 4);
-    memcpy(ekp.chaincode, &msg_out.xpub().c_str()[13], 32);
 
     return 0;
 };
@@ -284,6 +298,10 @@ int CTrezorDevice::SignMessage(const std::vector<uint32_t> &vPath, const std::st
 
     message::SignMessage msg_in;
     message::MessageSignature msg_out;
+
+    for (const auto i : vPath) {
+        msg_in.add_address_n(i);
+    }
 
     msg_in.set_coin_name("Bitcoin");
     msg_in.set_message(sMessage);
