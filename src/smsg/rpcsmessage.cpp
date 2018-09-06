@@ -862,8 +862,16 @@ static UniValue smsginbox(const JSONRPCRequest &request)
 
                     PushTime(objM, "received", smsgStored.timeReceived);
                     PushTime(objM, "sent", msg.timestamp);
+                    objM.pushKV("paid", UniValue(psmsg->IsPaidVersion()));
+
                     uint32_t nDaysRetention = psmsg->IsPaidVersion() ? psmsg->nonce[0] : 2;
+                    int64_t ttl = smsg::SMSGGetSecondsInDay() * nDaysRetention;
                     objM.pushKV("daysretention", (int)nDaysRetention);
+                    PushTime(objM, "expiration", psmsg->timestamp + ttl);
+
+                    uint32_t nPayload = smsgStored.vchMessage.size() - smsg::SMSG_HDR_LEN;
+                    objM.pushKV("payloadsize", (int)nPayload);
+
                     objM.pushKV("from", msg.sFromAddress);
                     objM.pushKV("to", sAddrTo);
                     objM.pushKV("text", sText);
@@ -989,6 +997,16 @@ static UniValue smsgoutbox(const JSONRPCRequest &request)
                         continue;
 
                     PushTime(objM, "sent", msg.timestamp);
+                    objM.pushKV("paid", UniValue(psmsg->IsPaidVersion()));
+
+                    uint32_t nDaysRetention = psmsg->IsPaidVersion() ? psmsg->nonce[0] : 2;
+                    int64_t ttl = smsg::SMSGGetSecondsInDay() * nDaysRetention;
+                    objM.pushKV("daysretention", (int)nDaysRetention);
+                    PushTime(objM, "expiration", psmsg->timestamp + ttl);
+
+                    uint32_t nPayload = smsgStored.vchMessage.size() - smsg::SMSG_HDR_LEN;
+                    objM.pushKV("payloadsize", (int)nPayload);
+
                     objM.pushKV("from", msg.sFromAddress);
                     objM.pushKV("to", sAddrTo);
                     objM.pushKV("text", sText);
