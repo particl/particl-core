@@ -2110,13 +2110,13 @@ static UniValue liststealthaddresses(const JSONRPCRequest &request)
             objA.pushKV("Address", aks.ToStealthAddress());
 
             if (fShowSecrets) {
-                objA.pushKV("Scan Secret", HexStr(aks.skScan.begin(), aks.skScan.end()));
+                objA.pushKV("Scan Secret", CBitcoinSecret(aks.skScan).ToString());
                 std::string sSpend;
                 CStoredExtKey *sekAccount = ea->ChainAccount();
                 if (sekAccount && !sekAccount->fLocked) {
                     CKey skSpend;
                     if (ea->GetKey(aks.akSpend, skSpend)) {
-                        sSpend = HexStr(skSpend.begin(), skSpend.end());
+                        sSpend = CBitcoinSecret(skSpend).ToString();
                     } else {
                         sSpend = "Extract failed.";
                     }
