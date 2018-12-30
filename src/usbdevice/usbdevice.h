@@ -133,6 +133,11 @@ public:
     virtual int LoadMnemonic(uint32_t wordcount, bool pinprotection, std::string &sError) { return 0; };
     virtual int Backup(std::string &sError) { return 0; };
 
+    virtual int OpenAsUnlocked() { return 0; }
+    virtual int CloseAndReadWhenUnlocked(uint16_t msg_type_out_awaited, uint16_t &msg_type_out, std::vector<uint8_t>& vec_out) { return 0; };
+    virtual int Unlock(std::string pin, std::string passphraseword, std::string &sError) { return 0; };
+    virtual int GenericUnlock(std::vector<uint8_t>* msg_in, uint16_t msg_type_in) { return 0; };
+
     const DeviceType *pType = nullptr;
     char cPath[512];
     char cSerialNo[128];

@@ -453,7 +453,7 @@ int CLedgerDevice::SignMessage(const std::vector<uint32_t> &vPath, const std::st
 
 int CLedgerDevice::PrepareTransaction(CMutableTransaction &tx, const CCoinsViewCache &view, const CKeyStore &keystore, int nHashType)
 {
-    if (!handle) {
+    if (0 != Open()) {
         return errorN(1, sError, __func__, "Device not open.");
     }
     int result, sw;

@@ -192,7 +192,7 @@ DeviceSignatureCreator::DeviceSignatureCreator(CUSBDevice *pDeviceIn, const CMut
 {
 };
 
-bool DeviceSignatureCreator::CreateSig(const SigningProvider& provider, std::vector<unsigned char> &vchSig, const CKeyID &keyid, const CScript &scriptCode, SigVersion sigversion) const
+bool DeviceSignatureCreator::CreateSig(const SigningProvider &provider, std::vector<unsigned char> &vchSig, const CKeyID &keyid, const CScript &scriptCode, SigVersion sigversion) const
 {
     if (!pDevice) {
         return false;

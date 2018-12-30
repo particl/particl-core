@@ -61,6 +61,11 @@ public:
     int LoadMnemonic(uint32_t wordcount, bool pinprotection, std::string &sError) override;
     int Backup(std::string &sError) override;
 
+    int OpenAsUnlocked() override;
+    int CloseAndReadWhenUnlocked(uint16_t msg_type_out_awaited, uint16_t &msg_type_out, std::vector<uint8_t> &vec_out) override;
+    int Unlock(std::string pin, std::string passphraseword, std::string &sError) override;
+    int GenericUnlock(std::vector<uint8_t>* msg_in, uint16_t msg_type_in) override;
+
     bool m_preparing = false;
     std::map<int, SignData> m_cache;
 
