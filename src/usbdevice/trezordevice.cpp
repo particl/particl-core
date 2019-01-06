@@ -13,6 +13,7 @@
 #include <usbdevice/usbwrapper.h>
 #include <util/strencodings.h>
 #include <util/system.h>
+#include <shutdown.h>
 #include <validation.h>
 
 #ifdef ENABLE_WALLET
@@ -159,6 +160,11 @@ int CTrezorDevice::CloseAndReadWhenUnlocked(uint16_t msg_type_out_awaited, uint1
     Close();
 
     for (;;) {
+
+        if (ShutdownRequested()) {
+            return errorN(1, sError, __func__, "shutdown requested.");
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
         if (0 != Open()) {
