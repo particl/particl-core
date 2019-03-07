@@ -30,8 +30,8 @@ SplashScreen::SplashScreen(interfaces::Node& node, Qt::WindowFlags f, const Netw
 {
     // set reference point, paddings
     int paddingRight            = 50;
-    int paddingTop              = 50;
-    int titleVersionVSpace      = 17;
+    int paddingTop              = 100;
+    int titleVersionVSpace      = 25;
     int titleCopyrightVSpace    = 40;
 
     float fontFactor            = 1.0;
@@ -63,13 +63,14 @@ SplashScreen::SplashScreen(interfaces::Node& node, Qt::WindowFlags f, const Netw
     QRect rGradient(QPoint(0,0), splashSize);
     pixPaint.fillRect(rGradient, gradient);
 
-    // draw the bitcoin icon, expected size of PNG: 1024x1024
-    QRect rectIcon(QPoint(-150,-122), QSize(430,430));
+    // draw the particl icon, expected size of PNG: 1024x1024
+    QRect rectIcon(QPoint(0,20), QSize(256,256));
 
     const QSize requiredSize(1024,1024);
     QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
 
-    pixPaint.drawPixmap(rectIcon, icon);
+    QPixmap icon_scaled = icon.scaled(256, 256, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    pixPaint.drawPixmap(rectIcon, icon_scaled);
 
     // check font size and drawing with
     pixPaint.setFont(QFont(font, 33*fontFactor));
