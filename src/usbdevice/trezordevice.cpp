@@ -53,7 +53,7 @@ int CTrezorDevice::Close()
     return 0;
 };
 
-static int WriteV1(webusb_device* handle, uint16_t msg_type, std::vector<uint8_t>& vec)
+int CTrezorDevice::WriteV1(uint16_t msg_type, std::vector<uint8_t>& vec)
 {
     static const size_t BUFFER_LEN = 64;
     uint8_t buffer[BUFFER_LEN];
@@ -138,7 +138,7 @@ static int ReadWithTimeoutV1(webusb_device* handle, uint16_t& msg_type, std::vec
     return 0;
 };
 
-static int ReadV1(webusb_device* handle, uint16_t& msg_type, std::vector<uint8_t>& vec)
+int CTrezorDevice::ReadV1(uint16_t& msg_type, std::vector<uint8_t>& vec)
 {
     return ReadWithTimeoutV1(handle, msg_type, vec, 60000);
 };
@@ -164,13 +164,13 @@ int CTrezorDevice::OpenIfUnlocked(std::string& sError)
         return errorN(1, sError, __func__, "SerializeToArray for Initialize failed.");
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_Initialize, vec_init)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_Initialize, vec_init)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 for Initialize failed.");
     }
 
     uint16_t msg_type_out = 0;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -228,13 +228,13 @@ int CTrezorDevice::GetFirmwareVersion(std::string& sFirmware, std::string& sErro
         return errorN(1, sError, __func__, "Failed to open device.");
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_GetFeatures, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_GetFeatures, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     uint16_t msg_type_out = 0;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -267,13 +267,13 @@ int CTrezorDevice::GetInfo(UniValue& info, std::string& sError)
         return errorN(1, sError, __func__, "Failed to open device.");
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_GetFeatures, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_GetFeatures, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     uint16_t msg_type_out = 0;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -317,13 +317,13 @@ int CTrezorDevice::GetPubKey(const std::vector<uint32_t>& vPath, CPubKey& pk, st
         return opened;
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_GetPublicKey, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_GetPublicKey, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     uint16_t msg_type_out = hw::trezor::messages::MessageType_PublicKey;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -368,12 +368,12 @@ int CTrezorDevice::GetXPub(const std::vector<uint32_t>& vPath, CExtPubKey& ekp, 
         return opened;
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_GetPublicKey, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_GetPublicKey, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -439,13 +439,13 @@ int CTrezorDevice::SignMessage(const std::vector<uint32_t>& vPath, const std::st
         return opened;
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_SignMessage, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_SignMessage, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     uint16_t msg_type_out = hw::trezor::messages::MessageType_ButtonRequest;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -453,13 +453,13 @@ int CTrezorDevice::SignMessage(const std::vector<uint32_t>& vPath, const std::st
     hw::trezor::messages::common::ButtonAck msg_in1;
     vec_in.resize(msg_in1.ByteSize());
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     msg_type_out = hw::trezor::messages::MessageType_MessageSignature;
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -548,12 +548,12 @@ int CTrezorDevice::CompleteTransaction(CMutableTransaction* tx)
         return errorN(1, sError, __func__, "SerializeToArray failed.");
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_SignTx, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_SignTx, vec_in)) {
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     for (;;) {
-        if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+        if (0 != ReadV1(msg_type_out, vec_out)) {
             return errorN(1, sError, __func__, "ReadV1 failed.");
         }
 
@@ -569,7 +569,7 @@ int CTrezorDevice::CompleteTransaction(CMutableTransaction* tx)
             if (!msg.SerializeToArray(vec_in.data(), vec_in.size())) {
                 return errorN(1, sError, __func__, "SerializeToArray failed.");
             }
-            if (0 != WriteV1(handle, hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
+            if (0 != WriteV1(hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
                 return errorN(1, sError, __func__, "WriteV1 failed.");
             }
             continue;
@@ -720,7 +720,7 @@ int CTrezorDevice::CompleteTransaction(CMutableTransaction* tx)
             return errorN(1, sError, __func__, "SerializeToArray failed.");
         }
 
-        if (0 != WriteV1(handle, hw::trezor::messages::MessageType_TxAck, vec_in)) {
+        if (0 != WriteV1(hw::trezor::messages::MessageType_TxAck, vec_in)) {
             return errorN(1, sError, __func__, "WriteV1 failed.");
         }
     }
@@ -755,14 +755,14 @@ int CTrezorDevice::LoadMnemonic(uint32_t wordcount, bool pinprotection, std::str
         return opened;
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_RecoveryDevice, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_RecoveryDevice, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
 
     for (;;) {
-        if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+        if (0 != ReadV1(msg_type_out, vec_out)) {
             Close();
             return errorN(1, sError, __func__, "ReadV1 failed.");
         }
@@ -784,7 +784,7 @@ int CTrezorDevice::LoadMnemonic(uint32_t wordcount, bool pinprotection, std::str
                 Close();
                 return errorN(1, sError, __func__, "SerializeToArray failed.");
             }
-            if (0 != WriteV1(handle, hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
+            if (0 != WriteV1(hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
                 Close();
                 return errorN(1, sError, __func__, "WriteV1 failed.");
             }
@@ -816,13 +816,13 @@ int CTrezorDevice::Backup(std::string& sError)
         return opened;
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_BackupDevice, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_BackupDevice, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
     for (;;) {
-        if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+        if (0 != ReadV1(msg_type_out, vec_out)) {
             Close();
             return errorN(1, sError, __func__, "ReadV1 failed.");
         }
@@ -844,7 +844,7 @@ int CTrezorDevice::Backup(std::string& sError)
                 Close();
                 return errorN(1, sError, __func__, "SerializeToArray failed.");
             }
-            if (0 != WriteV1(handle, hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
+            if (0 != WriteV1(hw::trezor::messages::MessageType_ButtonAck, vec_in)) {
                 Close();
                 return errorN(1, sError, __func__, "WriteV1 failed.");
             }
@@ -879,12 +879,12 @@ int CTrezorDevice::PromptUnlock(std::string& sError)
         return errorN(1, sError, __func__, "SerializeToArray failed.");
     }
 
-    if (0 != WriteV1(handle, hw::trezor::messages::MessageType_Ping, vec_in)) {
+    if (0 != WriteV1(hw::trezor::messages::MessageType_Ping, vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }
@@ -951,12 +951,12 @@ int CTrezorDevice::GenericUnlock(std::vector<uint8_t>* vec_in, uint16_t msg_type
         return errorN(1, sError, __func__, "Failed to open device.");
     }
 
-    if (0 != WriteV1(handle, msg_type_in, *vec_in)) {
+    if (0 != WriteV1(msg_type_in, *vec_in)) {
         Close();
         return errorN(1, sError, __func__, "WriteV1 failed.");
     }
 
-    if (0 != ReadV1(handle, msg_type_out, vec_out)) {
+    if (0 != ReadV1(msg_type_out, vec_out)) {
         Close();
         return errorN(1, sError, __func__, "ReadV1 failed.");
     }

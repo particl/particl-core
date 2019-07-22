@@ -35,6 +35,7 @@ private:
     };
 
     std::string GetCoinName();
+
 public:
     CTrezorDevice(const DeviceType *pType_, const char *cPath_, const char *cSerialNo_, int nInterface_)
         : CUSBDevice(pType_, cPath_, cSerialNo_, nInterface_) {};
@@ -68,7 +69,9 @@ public:
 
     bool m_preparing = false;
     std::map<int, SignData> m_cache;
-
+private:
+    int WriteV1(uint16_t msg_type, std::vector<uint8_t>& vec);
+    int ReadV1(uint16_t& msg_type, std::vector<uint8_t>& vec);
 protected:
     webusb_device *handle = nullptr;
 };
