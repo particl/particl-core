@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+import time
+import json
+import subprocess
+import textwrap
+
 from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
+from test_framework.authproxy import JSONRPCException
+from test_framework.util import assert_raises_rpc_error, assert_equal
 
 
 def read_dump(file_name):
@@ -32,8 +38,9 @@ def read_dump(file_name):
 class WalletParticlTest(ParticlTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 3
+        self.num_nodes = 4
         self.extra_args = [ ['-debug',] for i in range(self.num_nodes)]
+        self.extra_args[3].append('-disablewallet')
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -42,7 +49,19 @@ class WalletParticlTest(ParticlTestFramework):
         self.add_nodes(self.num_nodes, extra_args=self.extra_args)
         self.start_nodes()
 
-    def run_test (self):
+    def particl_wallet_process(self, *args):
+        binary = self.config["environment"]["BUILDDIR"] + '/src/particl-wallet' + self.config["environment"]["EXEEXT"]
+        args = ['-datadir={}'.format(self.nodes[0].datadir), '-regtest'] + list(args)
+        return subprocess.Popen([binary] + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+    def assert_tool_output(self, output, *args):
+        p = self.particl_wallet_process(*args)
+        stdout, stderr = p.communicate()
+        assert_equal(p.poll(), 0)
+        assert_equal(stderr, '')
+        assert_equal(stdout, output)
+
+    def run_test(self):
         tmpdir = self.options.tmpdir
         nodes = self.nodes
 
@@ -133,7 +152,7 @@ class WalletParticlTest(ParticlTestFramework):
         assert(ro['reason'] == 'Account already exists in db.')
 
 
-        # make sure info hasn't been forgotten/overwritten
+        # Ensure info hasn't been forgotten/overwritten
         ro = nodes[0].extkey('account', account0_id)
         fFound = False
         for c in ro['chains']:
@@ -143,9 +162,7 @@ class WalletParticlTest(ParticlTestFramework):
             break
         assert(fFound)
 
-
-        ro = nodes[0].extkey('deriveAccount', 'Should fail', 'abcd')
-        assert(ro['result'] == 'Failed.')
+        assert(nodes[0].extkey('deriveAccount', 'Should fail', 'abcd')['result'] == 'Failed.')
 
         try:
             ro = nodes[0].extkey('deriveAccount', 'Should fail', "0'", 'abcd')
@@ -224,17 +241,10 @@ class WalletParticlTest(ParticlTestFramework):
         nodes[1].encryptwallet('qwerty234')
 
         try:
-            ro = nodes[1].extkeyimportmaster('abandon baby cabbage dad eager fabric gadget habit ice kangaroo lab absorb')
+            nodes[1].extkeyimportmaster('abandon baby cabbage dad eager fabric gadget habit ice kangaroo lab absorb')
             raise AssertionError('extkeyimportmaster on locked wallet.')
         except JSONRPCException as e:
             assert('Wallet locked' in e.error['message'])
-
-        try:
-            ro = nodes[1].walletpassphrase('qwerty123', 300)
-            raise AssertionError('Unlocked with incorrect passphrase.')
-        except JSONRPCException as e:
-            assert('passphrase entered was incorrect' in e.error['message'])
-        assert(nodes[1].getwalletinfo()['encryptionstatus'] == 'Locked')
 
         nodes[1].walletpassphrase('qwerty234', 300)
         ro = nodes[1].getwalletinfo()
@@ -260,6 +270,7 @@ class WalletParticlTest(ParticlTestFramework):
 
         assert(ro[1]['type'] == 'Account')
         assert(ro[1]['id'] == roImport1['account_id'])
+        assert(ro[1]['encrypted'] == 'true')
         assert(ro[1]['evkey'] == 'xparFkF1G6Dd5EW9vm2QFXMwseHFDx2hkXqqPExy6E1Pmf3XX1AyBy97PjVq2SAENoG8uVtmX1S9Hm6BE4aEPNxydc8cb3MsRPrcw4rq7V3dGRM')
         assert(ro[1]['root_key_id'] == roImport1['master_id'])
         assert(ro[1]['internal_chain'] == 'pparszMzzW1247AwkMQ1ou7KnV2o9HDHQJdycBVVAkkWeKHVwKwAqcTNVT2jpsxeXfsgvfHJYhyUuiT93r8iqmLTd52nzFeRfTggtVGuHPAAsb7f')
@@ -274,13 +285,13 @@ class WalletParticlTest(ParticlTestFramework):
         address1 = nodes[1].getnewaddress()
 
         try:
-            ro = nodes[1].extkeyimportmaster(decodedRoot)
+            nodes[1].extkeyimportmaster(decodedRoot)
             assert(False), 'Imported same root key twice.'
         except JSONRPCException as e:
             assert('ExtKeyImportLoose failed, Derived key already exists in wallet' in e.error['message'])
 
         try:
-            ro = nodes[1].walletpassphrasechange('fail', 'changedPass')
+            nodes[1].walletpassphrasechange('fail', 'changedPass')
             assert(False), 'Changed password with incorrect old password.'
         except JSONRPCException as e:
             assert('passphrase entered was incorrect' in e.error['message'])
@@ -291,6 +302,13 @@ class WalletParticlTest(ParticlTestFramework):
         # Restart node
         self.stop_node(1)
         self.start_node(1, self.extra_args[1])
+
+        try:
+            nodes[1].walletpassphrase('qwerty234', 300)
+            raise AssertionError('Unlocked with incorrect passphrase.')
+        except JSONRPCException as e:
+            assert('passphrase entered was incorrect' in e.error['message'])
+        assert(nodes[1].getwalletinfo()['encryptionstatus'] == 'Locked')
 
         nodes[1].walletpassphrase('changedPass', 300)
 
@@ -644,6 +662,79 @@ class WalletParticlTest(ParticlTestFramework):
         nodes[1].walletpassphrase('changedPass2', 5)
         txnid = nodes[1].sendtoaddress(address1, 0.01, "", "", False, "", True)
         assert(len(nodes[1].bumpfee(txnid)['errors']) == 0)
+
+        self.log.info('Test createwallet')
+        nodes[0].createwallet('new_wallet_with_privkeys')
+        w_rpc = nodes[0].get_wallet_rpc('new_wallet_with_privkeys')
+        w_rpc.extkeyimportmaster(w_rpc.mnemonic('new')['master'])
+        ek_list = w_rpc.extkey('list', True)
+        evkey1 = ek_list[0]['evkey']
+        epkey1 = ek_list[0]['epkey']
+        epkey2 = ek_list[1]['epkey']
+
+        self.log.info('Test disable_privatekeys')
+        nodes[0].createwallet('new_wallet_no_privkeys', True)
+        w_rpc = nodes[0].get_wallet_rpc('new_wallet_no_privkeys')
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.getnewaddress)
+        mnemonic = w_rpc.mnemonic('new')['master']
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.extkeyimportmaster, mnemonic)
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.extkeygenesisimport, mnemonic)
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.importstealthaddress, 'fake', 'fake')
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.extkey, 'import', evkey1)
+        assert_raises_rpc_error(-4, 'Error: Private keys are disabled for this wallet', w_rpc.extkey, 'importAccount', evkey1)
+        w_rpc.extkey('import', epkey1)
+        w_rpc.extkey('importAccount', epkey2)
+
+        self.log.info('Test load/unloadwallet')
+        assert('new_wallet_with_privkeys' in nodes[0].listwallets())
+        nodes[0].unloadwallet('new_wallet_with_privkeys')
+        assert('new_wallet_with_privkeys' not in nodes[0].listwallets())
+        nodes[0].loadwallet('new_wallet_with_privkeys')
+        w_rpc = nodes[0].get_wallet_rpc('new_wallet_with_privkeys')
+        ek_list = w_rpc.extkey('list', True)
+
+        self.log.info('Test particl-wallet')
+        out = textwrap.dedent('''\
+            Wallet info
+            ===========
+            Encrypted: no
+            HD (hd seed available): no
+            Keypool Size: 0
+            Transactions: 0
+            Address Book: 0
+        ''')
+        self.assert_tool_output(out, '-wallet=w_created', 'create')
+
+        self.log.info('Test permanent lockunspent')
+        unspent = nodes[2].listunspent()
+        assert(nodes[2].lockunspent(False, [unspent[0]], True) == True)
+        assert(nodes[2].lockunspent(False, [unspent[1]], True) == True)
+        assert(len(nodes[2].listlockunspent()) == 2)
+        # Restart node
+        self.stop_node(2)
+        self.start_node(2, self.extra_args[2])
+        assert(len(nodes[2].listlockunspent()) == 2)
+        assert(len(nodes[2].listunspent()) < len(unspent))
+        assert(nodes[2].lockunspent(True, [unspent[0]]) == True)
+        assert_raises_rpc_error(-8, 'Invalid parameter, expected locked output', nodes[2].lockunspent, True, [unspent[0]])
+        assert(len(nodes[2].listunspent()) == len(unspent)-1)
+        assert(nodes[2].lockunspent(True) == True)
+        assert(len(nodes[2].listunspent()) == len(unspent))
+        assert(nodes[2].lockunspent(True) == True)  # Shouldn't crash
+
+        ro = nodes[2].getblockstats(nodes[2].getblockchaininfo()['blocks'])
+        assert(ro['txs'] == 1)
+        assert(ro['height'] == 0)
+
+        self.log.info('Test disablewallet')
+        assert_raises_rpc_error(-32601, 'Method not found', nodes[3].getwalletinfo)
+
+        self.log.info('Test walletsettings other')
+        nodes[1].walletlock()  # Make sure wallet is unlocked.
+        nodes[1].walletpassphrase('changedPass2', 10)
+        assert(nodes[1].debugwallet()['m_is_only_instance'] == True)
+        nodes[1].walletsettings('other', {'onlyinstance': False})
+        assert(nodes[1].debugwallet()['m_is_only_instance'] == False)
 
 
 if __name__ == '__main__':

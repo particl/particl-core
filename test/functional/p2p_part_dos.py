@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
-from test_framework.messages import *
-
-import io
 import time
+
+from test_framework.test_particl import ParticlTestFramework
+from test_framework.messages import CBlockHeader, msg_headers
+from test_framework.util import connect_nodes
 
 _compactblocks = __import__('p2p_compactblocks')
 TestP2PConn = _compactblocks.TestP2PConn
@@ -17,8 +16,8 @@ TestP2PConn = _compactblocks.TestP2PConn
 class DoSTest(ParticlTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 1
-        self.extra_args = [ ['-debug=1', '-noacceptnonstdtxn', '-banscore=2000000', '-reservebalance=1000000'] for i in range(self.num_nodes)]
+        self.num_nodes = 2
+        self.extra_args = [ ['-debug=1', '-nosmsg', '-noacceptnonstdtxn', '-banscore=2000000', '-reservebalance=1000000'] for i in range(self.num_nodes)]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -31,41 +30,43 @@ class DoSTest(ParticlTestFramework):
 
     def create_block_header(self, node, hashPrevBlock, hashMerkleRoot, target_block_hash):
         target_block = node.getblock(target_block_hash, 2)
-        block = CBlockHeader()
+        block = CBlockHeader(is_part=True)
         block.nTime = target_block['time']
         block.hashPrevBlock = hashPrevBlock
         block.nVersion = target_block['version']
         block.nBits = int(target_block['bits'], 16) # Will break after a difficulty adjustment...
         block.hashMerkleRoot = hashMerkleRoot
-        #block.hashWitnessMerkleRoot = 0
+        block.hashWitnessMerkleRoot = 0
         #block.vchBlockSig = b"x" * 1024
         #block.hashMerkleRoot = block.calc_merkle_root()
         block.calc_sha256()
-        #print(block)
         return block
 
     def get_block_header(self, node, target_block_hash):
         target_block = node.getblock(target_block_hash, 2)
-        block = CBlockHeader()
+        block = CBlockHeader(is_part=True)
         block.nTime = target_block['time']
         block.hashPrevBlock = int(target_block['previousblockhash'], 16)
         block.nVersion = target_block['version']
         block.nBits = int(target_block['bits'], 16)
         block.hashMerkleRoot = int(target_block['merkleroot'], 16)
-        #block.hashWitnessMerkleRoot = int(target_block['witnessmerkleroot'], 16)
+        block.hashWitnessMerkleRoot = int(target_block['witnessmerkleroot'], 16)
         block.calc_sha256()
         return block
 
     def run_test(self):
 
         check_blockindex_decay = True
-        #check_blockindex_decay = False
+
+        dos_nodes = self.num_nodes
+        dos_nodes = 1
 
         nodes = self.nodes
+        connect_nodes(self.nodes[0], 1)
 
         p2p_conns = []
-        for i in range(self.num_nodes):
-            p2p_conns.append(self.nodes[i].add_p2p_connection(TestP2PConn()))
+        for i in range(dos_nodes):
+            p2p_conns.append(self.nodes[i].add_p2p_connection(TestP2PConn(2)))
 
         nodes[0].extkeyimportmaster('pact mammal barrel matrix local final lecture chunk wasp survey bid various book strong spread fall ozone daring like topple door fatigue limb olympic', '', 'true')
         nodes[0].getnewextaddress('lblExtTest')
@@ -78,7 +79,7 @@ class DoSTest(ParticlTestFramework):
         self.wait_for_height(nodes[0], 20, 2000)
 
         # Let the test nodes get in sync
-        for i in range(self.num_nodes):
+        for i in range(dos_nodes):
             self.nodes[i].p2p.wait_for_verack()
 
         MAX_HEADERS = 10
@@ -100,7 +101,6 @@ class DoSTest(ParticlTestFramework):
             for b in range(MAX_HEADERS):
                 target_block_hash = nodes[0].getblockhash(block_count - MAX_HEADERS + b)
                 block = self.create_block_header(nodes[0], hashPrevBlock=prevBlockHash, hashMerkleRoot=i, target_block_hash=target_block_hash)
-                block.rehash() # Just in case
                 prevBlockHash = int(block.hash, 16)
                 blocks.append(block)
 
@@ -108,7 +108,7 @@ class DoSTest(ParticlTestFramework):
             msg.headers.extend(blocks)
             sent += len(blocks)
             # time.sleep(0.2)
-            for i in range(self.num_nodes):
+            for i in range(dos_nodes):
                 p2p_conns[i].send_message(msg)
 
         time.sleep(2)
@@ -134,8 +134,13 @@ class DoSTest(ParticlTestFramework):
         assert(found_misbehave_line)
 
         peer_info = nodes[0].getpeerinfo()
-        assert(peer_info[0]['loose_headers'] >= 200)
-        assert(peer_info[0]['banscore'] > 100)
+        assert(peer_info[1]['loose_headers'] >= 200)
+        assert(peer_info[1]['banscore'] > 100)
+
+        # Verify node under DOS isn't forwarding bad headers
+        peer_info1 = nodes[1].getpeerinfo()
+        assert(peer_info1[0]['loose_headers'] == 0)
+        assert(peer_info1[0]['banscore'] == 0)
 
         if check_blockindex_decay:
             self.log.info('Waiting for unfilled headers to decay')
@@ -157,9 +162,6 @@ class DoSTest(ParticlTestFramework):
                         break
             assert(found_misbehave_line)
 
-            #peer_info = self.node.getpeerinfo()
-            #print('peer_info', peer_info)
-
             self.log.info('Replace headers for next test')
             t = int(time.time()+15) & 0xfffffff0
             self.log.info('Initial blockindexsize: %d\n' % (nodes[0].getblockchaininfo()['blockindexsize']))
@@ -173,7 +175,6 @@ class DoSTest(ParticlTestFramework):
                 for b in range(MAX_HEADERS):
                     target_block_hash = nodes[0].getblockhash(block_count - MAX_HEADERS + b)
                     block = self.create_block_header(nodes[0], hashPrevBlock=prevBlockHash, hashMerkleRoot=i, target_block_hash=target_block_hash)
-                    block.rehash() # Just in case
                     prevBlockHash = int(block.hash, 16)
                     blocks.append(block)
 
@@ -181,17 +182,17 @@ class DoSTest(ParticlTestFramework):
                 msg.headers.extend(blocks)
                 sent += len(blocks)
                 # time.sleep(0.2)
-                for i in range(self.num_nodes):
+                for i in range(dos_nodes):
                     p2p_conns[i].send_message(msg)
 
             self.log.info('Number of headers sent: %d' % (sent))
             self.log.info('blockindexsize: %d' % (nodes[0].getblockchaininfo()['blockindexsize']))
 
-
         self.log.info('Restart and check how many block headers were saved to disk')
         self.stop_node(0)
         self.start_node(0, self.extra_args[0])
         time.sleep(2)
+        connect_nodes(self.nodes[0], 1)
 
         self.log.info('After restart blockindexsize: %d' % (nodes[0].getblockchaininfo()['blockindexsize']))
         assert(nodes[0].getblockchaininfo()['blockindexsize'] == 21)
@@ -199,20 +200,19 @@ class DoSTest(ParticlTestFramework):
         self.log.info('sending many duplicate headers\n\n')
 
         self.nodes[0].add_p2p_connection(p2p_conns[0])
-        for i in range(self.num_nodes):
+        for i in range(dos_nodes):
             self.nodes[i].p2p.wait_for_verack()
 
         self.log.info("Initial blockindexsize: %d\n" % (nodes[0].getblockchaininfo()['blockindexsize']))
 
-        DUPLICATE_ITERATIONS = 2000
+        DUPLICATE_ITERATIONS = 3000
         target_block_hash = nodes[0].getblockhash(20)
         block = self.get_block_header(nodes[0], target_block_hash=target_block_hash)
-        block.rehash() # Just in case
         prevBlockHash = int(block.hash, 16)
         sent = 0
         for i in range(DUPLICATE_ITERATIONS):
             if i % 250 == 0:
-                print('Iteration', i , 'of', DUPLICATE_ITERATIONS, "sent", 1, "duplicate header")
+                self.log.info('Iteration %d of %d, sent %d duplicate headers' % (i, DUPLICATE_ITERATIONS, sent))
             blocks = []
             blocks.append(block)
 
@@ -220,21 +220,18 @@ class DoSTest(ParticlTestFramework):
             msg.headers.extend(blocks)
             sent += len(blocks)
             # time.sleep(0.2)
-            for i in range(self.num_nodes):
+            for i in range(dos_nodes):
                 p2p_conns[i].send_message(msg)
 
         time.sleep(2)
 
-
         self.log.info("blockindexsize: %d\n" % (nodes[0].getblockchaininfo()['blockindexsize']))
 
-
-        # Check log
         self.log.info('Reading log file: ' + log_path)
         found_dos_line = False
         with open(log_path, 'r', encoding='utf8') as fp:
             for line in fp:
-                if line.find('DoS limits, too many duplicate') > -1:
+                if line.find('Too many duplicates') > -1:
                     found_dos_line = True
                     self.log.info('Found line in log: ' + line)
                     break

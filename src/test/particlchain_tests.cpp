@@ -1,12 +1,11 @@
-// Copyright (c) 2017-2018 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <test/test_bitcoin.h>
+#include <test/util/setup_common.h>
 #include <net.h>
-#include <keystore.h>
+#include <script/signingprovider.h>
 #include <script/script.h>
-#include <script/ismine.h>
 #include <consensus/validation.h>
 #include <consensus/merkle.h>
 #include <consensus/tx_verify.h>
@@ -41,7 +40,7 @@ BOOST_AUTO_TEST_CASE(oldversion_test)
 BOOST_AUTO_TEST_CASE(signature_test)
 {
     SeedInsecureRand();
-    CBasicKeyStore keystore;
+    FillableSigningProvider keystore;
 
     CKey k;
     InsecureNewKey(k, true);
@@ -83,7 +82,7 @@ BOOST_AUTO_TEST_CASE(signature_test)
 BOOST_AUTO_TEST_CASE(particlchain_test)
 {
     SeedInsecureRand();
-    CBasicKeyStore keystore;
+    FillableSigningProvider keystore;
 
     CKey k;
     InsecureNewKey(k, true);
@@ -132,141 +131,6 @@ BOOST_AUTO_TEST_CASE(particlchain_test)
     txnSpend.nVersion = PARTICL_BLOCK_VERSION;
 }
 
-BOOST_AUTO_TEST_CASE(opiscoinstake_test)
-{
-    SeedInsecureRand();
-    CBasicKeyStore keystoreA;
-    CBasicKeyStore keystoreB;
-
-    CKey kA, kB;
-    InsecureNewKey(kA, true);
-    keystoreA.AddKey(kA);
-
-    CPubKey pkA = kA.GetPubKey();
-    CKeyID idA = pkA.GetID();
-
-    InsecureNewKey(kB, true);
-    keystoreB.AddKey(kB);
-
-    CPubKey pkB = kB.GetPubKey();
-    CKeyID256 idB = pkB.GetID256();
-
-    CScript scriptSignA = CScript() << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG;
-    CScript scriptSignB = CScript() << OP_DUP << OP_SHA256 << ToByteVector(idB) << OP_EQUALVERIFY << OP_CHECKSIG;
-
-    CScript script = CScript()
-        << OP_ISCOINSTAKE << OP_IF
-        << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ELSE
-        << OP_DUP << OP_SHA256 << ToByteVector(idB) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ENDIF;
-
-    BOOST_CHECK(HasIsCoinstakeOp(script));
-    BOOST_CHECK(script.IsPayToPublicKeyHash256_CS());
-
-    BOOST_CHECK(!IsSpendScriptP2PKH(script));
-
-
-    CScript scriptFail1 = CScript()
-        << OP_ISCOINSTAKE << OP_IF
-        << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ELSE
-        << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ENDIF;
-    BOOST_CHECK(IsSpendScriptP2PKH(scriptFail1));
-
-
-    CScript scriptTest, scriptTestB;
-    BOOST_CHECK(GetCoinstakeScriptPath(script, scriptTest));
-    BOOST_CHECK(scriptTest == scriptSignA);
-
-
-    BOOST_CHECK(GetNonCoinstakeScriptPath(script, scriptTest));
-    BOOST_CHECK(scriptTest == scriptSignB);
-
-
-    BOOST_CHECK(SplitConditionalCoinstakeScript(script, scriptTest, scriptTestB));
-    BOOST_CHECK(scriptTest == scriptSignA);
-    BOOST_CHECK(scriptTestB == scriptSignB);
-
-
-    txnouttype whichType;
-    // IsStandard should fail until chain time is >= OpIsCoinstakeTime
-    BOOST_CHECK(!IsStandard(script, whichType));
-
-
-    BOOST_CHECK(IsMine(keystoreB, script));
-    BOOST_CHECK(IsMine(keystoreA, script));
-
-
-    CAmount nValue = 100000;
-    SignatureData sigdataA, sigdataB, sigdataC;
-
-    CMutableTransaction txn;
-    txn.nVersion = PARTICL_TXN_VERSION;
-    txn.SetType(TXN_COINSTAKE);
-    txn.nLockTime = 0;
-
-    int nBlockHeight = 1;
-    OUTPUT_PTR<CTxOutData> outData = MAKE_OUTPUT<CTxOutData>();
-    outData->vData.resize(4);
-    memcpy(&outData->vData[0], &nBlockHeight, 4);
-    txn.vpout.push_back(outData);
-
-
-    OUTPUT_PTR<CTxOutStandard> out0 = MAKE_OUTPUT<CTxOutStandard>();
-    out0->nValue = nValue;
-    out0->scriptPubKey = script;
-    txn.vpout.push_back(out0);
-    txn.vin.push_back(CTxIn(COutPoint(uint256S("d496208ea84193e0c5ed05ac708aec84dfd2474b529a7608b836e282958dc72b"), 0)));
-    BOOST_CHECK(txn.IsCoinStake());
-
-    std::vector<uint8_t> vchAmount(8);
-    memcpy(&vchAmount[0], &nValue, 8);
-
-
-    BOOST_CHECK(ProduceSignature(keystoreA, MutableTransactionSignatureCreator(&txn, 0, vchAmount, SIGHASH_ALL), script, sigdataA));
-    BOOST_CHECK(!ProduceSignature(keystoreB, MutableTransactionSignatureCreator(&txn, 0, vchAmount, SIGHASH_ALL), script, sigdataB));
-
-
-    ScriptError serror = SCRIPT_ERR_OK;
-    int nFlags = STANDARD_SCRIPT_VERIFY_FLAGS;
-    CScript scriptSig;
-    BOOST_CHECK(VerifyScript(scriptSig, script, &sigdataA.scriptWitness, nFlags, MutableTransactionSignatureChecker(&txn, 0, vchAmount), &serror));
-
-
-    txn.nVersion = PARTICL_TXN_VERSION;
-    txn.SetType(TXN_STANDARD);
-    BOOST_CHECK(!txn.IsCoinStake());
-
-    // This should fail anyway as the txn changed
-    BOOST_CHECK(!VerifyScript(scriptSig, script, &sigdataA.scriptWitness, nFlags, MutableTransactionSignatureChecker(&txn, 0, vchAmount), &serror));
-
-    BOOST_CHECK(!ProduceSignature(keystoreA, MutableTransactionSignatureCreator(&txn, 0, vchAmount, SIGHASH_ALL), script, sigdataC));
-    BOOST_CHECK(ProduceSignature(keystoreB, MutableTransactionSignatureCreator(&txn, 0, vchAmount, SIGHASH_ALL), script, sigdataB));
-
-    BOOST_CHECK(VerifyScript(scriptSig, script, &sigdataB.scriptWitness, nFlags, MutableTransactionSignatureChecker(&txn, 0, vchAmount), &serror));
-
-
-
-    CScript script_h160 = CScript()
-        << OP_ISCOINSTAKE << OP_IF
-        << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ELSE
-        << OP_HASH160 << ToByteVector(idA) << OP_EQUAL
-        << OP_ENDIF;
-    BOOST_CHECK(script_h160.IsPayToScriptHash_CS());
-
-
-    CScript script_h256 = CScript()
-        << OP_ISCOINSTAKE << OP_IF
-        << OP_DUP << OP_HASH160 << ToByteVector(idA) << OP_EQUALVERIFY << OP_CHECKSIG
-        << OP_ELSE
-        << OP_SHA256 << ToByteVector(idB) << OP_EQUAL
-        << OP_ENDIF;
-    BOOST_CHECK(script_h256.IsPayToScriptHash256_CS());
-}
-
 BOOST_AUTO_TEST_CASE(varints)
 {
     // encode
@@ -282,13 +146,13 @@ BOOST_AUTO_TEST_CASE(varints)
         BOOST_CHECK(0 == memcmp(c, &v[size], sz));
         size += sz;
         BOOST_CHECK(size == v.size());
-    };
+    }
 
     for (uint64_t i = 0;  i < 100000000000ULL; i += 999999937) {
         BOOST_CHECK(0 == PutVarInt(v, i));
         size += GetSizeOfVarInt<VarIntMode::DEFAULT>(i);
         BOOST_CHECK(size == v.size());
-    };
+    }
 
 
     // decode
@@ -298,14 +162,14 @@ BOOST_AUTO_TEST_CASE(varints)
         BOOST_CHECK(0 == GetVarInt(v, o, j, nB));
         BOOST_CHECK_MESSAGE(i == (int)j, "decoded:" << j << " expected:" << i);
         o += nB;
-    };
+    }
 
     for (uint64_t i = 0;  i < 100000000000ULL; i += 999999937) {
         uint64_t j = -1;
         BOOST_CHECK(0 == GetVarInt(v, o, j, nB));
         BOOST_CHECK_MESSAGE(i == j, "decoded:" << j << " expected:" << i);
         o += nB;
-    };
+    }
 }
 
 BOOST_AUTO_TEST_CASE(mixed_input_types)
@@ -351,31 +215,29 @@ BOOST_AUTO_TEST_CASE(mixed_input_types)
         std::make_pair( (std::vector<int>) {0, 2, -1}, false)
     };
 
-    for (auto t : tests)
-    {
+    for (auto t : tests) {
         txn.vin.clear();
 
-        for (auto ti : t.first)
-        {
-            if (ti < 0)
-            {
+        for (auto ti : t.first) {
+            if (ti < 0)  {
                 CTxIn ai;
                 ai.prevout.n = COutPoint::ANON_MARKER;
                 txn.vin.push_back(ai);
                 continue;
-            };
+            }
             txn.vin.push_back(CTxIn(prevHash, ti));
-        };
+        }
 
         CTransaction tx_c(txn);
-        CValidationState state;
+        TxValidationState state;
         Consensus::CheckTxInputs(tx_c, state, inputs, nSpendHeight, txfee);
 
-        if (t.second)
+        if (t.second) {
             BOOST_CHECK(state.GetRejectReason() != "mixed-input-types");
-        else
+        } else {
             BOOST_CHECK(state.GetRejectReason() == "mixed-input-types");
-    };
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(coin_year_reward)

@@ -16,6 +16,8 @@ enum AddressIndexType {
     ADDR_INDT_SCRIPT_ADDRESS         = 2,
     ADDR_INDT_PUBKEY_ADDRESS_256     = 3,
     ADDR_INDT_SCRIPT_ADDRESS_256     = 4,
+    ADDR_INDT_WITNESS_V0_KEYHASH     = 5,
+    ADDR_INDT_WITNESS_V0_SCRIPTHASH  = 6,
 };
 
 struct CAddressUnspentKey {

@@ -5,10 +5,14 @@
 #ifndef BITCOIN_WALLET_RPCHDWALLET_H
 #define BITCOIN_WALLET_RPCHDWALLET_H
 
-class CRPCTable;
-class CHDWallet;
-class JSONRPCRequest;
+#include <memory>
+#include <vector>
 
-void RegisterHDWalletRPCCommands(CRPCTable &t);
+namespace interfaces {
+class Chain;
+class Handler;
+}
+
+void RegisterHDWalletRPCCommands(interfaces::Chain& chain, std::vector<std::unique_ptr<interfaces::Handler>>& handlers);
 
 #endif //BITCOIN_WALLET_RPCHDWALLET_H

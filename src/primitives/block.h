@@ -29,7 +29,6 @@ public:
     uint32_t nBits;
     uint32_t nNonce;
 
-
     CBlockHeader()
     {
         SetNull();
@@ -42,8 +41,9 @@ public:
         READWRITE(nVersion);
         READWRITE(hashPrevBlock);
         READWRITE(hashMerkleRoot);
-        if (IsParticlVersion())
+        if (IsParticlVersion()) {
             READWRITE(hashWitnessMerkleRoot);
+        }
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
@@ -134,9 +134,9 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITEAS(CBlockHeader, *this);
         READWRITE(vtx);
-
-        if (nVersion == PARTICL_BLOCK_VERSION)
+        if (nVersion == PARTICL_BLOCK_VERSION) {
             READWRITE(vchBlockSig);
+        }
     }
 
     void SetNull()

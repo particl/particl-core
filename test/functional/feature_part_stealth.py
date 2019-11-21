@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose
-from test_framework.util import *
+import json
+
+from test_framework.test_particl import ParticlTestFramework, isclose, connect_nodes_bi
+from test_framework.util import assert_raises_rpc_error
 
 
 class StealthTest(ParticlTestFramework):
@@ -34,7 +35,7 @@ class StealthTest(ParticlTestFramework):
         assert(nodes[0].getwalletinfo()['total_balance'] == 100000)
 
 
-        ro = nodes[1].extkeyimportmaster('drip fog service village program equip minute dentist series hawk crop sphere olympic lazy garbage segment fox library good alley steak jazz force inmate')
+        nodes[1].extkeyimportmaster('drip fog service village program equip minute dentist series hawk crop sphere olympic lazy garbage segment fox library good alley steak jazz force inmate')
         sxAddrTo1 = nodes[1].getnewstealthaddress()
         assert(sxAddrTo1 == 'TetbYTGv5LiqyFiUD3a5HHbpSinQ9KiRYDGAMvRzPfz4RnHMbKGAwDr1fjLGJ5Eqg1XDwpeGyqWMiwdK3qM3zKWjzHNpaatdoHVzzA')
 
@@ -65,9 +66,7 @@ class StealthTest(ParticlTestFramework):
         sxAddrTo2 = '32eEcCuGkGjP82BTF3kquiCDjZWmZiyhqe7C6isbv6MJZSKAeWNx5g436QuhGNc6DNYpboDm3yNiqYmTmkg76wYr5JCKgdEUPqLCWaMW'
         assert(ro['stealth_address'] == sxAddrTo2)
 
-
-        ro = nodes[1].liststealthaddresses()
-        sro = str(ro)
+        sro = str(nodes[1].liststealthaddresses())
         assert(sxAddrTo1 in sro)
         assert(sxAddrTo2 in sro)
 
@@ -147,15 +146,9 @@ class StealthTest(ParticlTestFramework):
         assert(isclose(ro[-1]['amount'], 0.6))
         assert('test 6' in str(ro[-1]))
 
-        ro = nodes[2].walletpassphrase('qwerty234', 400)
+        nodes[2].walletpassphrase('qwerty234', 400)
 
-
-
-        # Start staking
-        ro = nodes[0].walletsettings('stakelimit', {'height':1})
-        ro = nodes[0].reservebalance(False)
-
-        assert(self.wait_for_height(nodes[0], 1))
+        self.stakeBlocks(1)
 
         block1_hash = nodes[0].getblockhash(1)
         ro = nodes[0].getblock(block1_hash)
@@ -215,6 +208,35 @@ class StealthTest(ParticlTestFramework):
         replay = nodes[0].derivefromstealthaddress(sx2_b32, ro['ephemeral_privatekey'])
         assert(replay['pubkey'] == ro['pubkey'])
         assert(replay['ephemeral_pubkey'] == ro['ephemeral_pubkey'])
+
+
+        self.log.info('Test v2 stealth address')
+        sxAddrV2 = []
+        for i in range(6):
+            sxAddrV2.append(nodes[1].getnewstealthaddress('addr v2 {}'.format(i), '0', '0', True, True))
+        # Import should recover both stealth addresses, despite only detecting txns for the second and sixth.
+        nodes[0].sendtoaddress(sxAddrV2[1], 2.0)
+        self.stakeBlocks(1)
+        nodes[0].sendtoaddress(sxAddrV2[5], 2.0)
+        self.stakeBlocks(1)
+
+        self.log.info('Test rescan lookahead')
+        nodes[1].createwallet('test_import')
+        w_import = nodes[1].get_wallet_rpc('test_import')
+        w_import.extkeyimportmaster('drip fog service village program equip minute dentist series hawk crop sphere olympic lazy garbage segment fox library good alley steak jazz force inmate')
+        wi_info = w_import.getwalletinfo()
+
+        w1 = nodes[1].get_wallet_rpc('')
+        w1_info = w1.getwalletinfo()
+
+        # Imported wallet should be missing imported sx addr
+        assert(wi_info['txcount'] == w1_info['txcount'] - 1)
+
+        wi_ls = w_import.liststealthaddresses()
+        w1_ls = w1.liststealthaddresses()
+        w1_ls_flat = self.dumpj(w1_ls)
+        for sx in wi_ls[0]['Stealth Addresses']:
+            assert(sx['Address'] in w1_ls_flat)
 
 
 if __name__ == '__main__':

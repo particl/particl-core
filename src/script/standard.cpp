@@ -8,12 +8,9 @@
 #include <crypto/sha256.h>
 #include <pubkey.h>
 #include <script/script.h>
-#include <util/system.h>
-#include <util/strencodings.h>
 
 #include <key/extkey.h>
 #include <key/stealth.h>
-
 
 typedef std::vector<unsigned char> valtype;
 
@@ -30,9 +27,13 @@ bool CScriptID::Set(const uint256& in)
 
 bool CScriptID256::Set(const CScript& in)
 {
-    *this = HashSha256(in.begin(), in.end());
+    *this = CScriptID256(HashSha256(in.begin(), in.end()));
     return true;
 };
+
+ScriptHash::ScriptHash(const CScript& in) : uint160(Hash160(in.begin(), in.end())) {}
+
+PKHash::PKHash(const CPubKey& pubkey) : uint160(pubkey.GetID()) {}
 
 WitnessV0ScriptHash::WitnessV0ScriptHash(const CScript& in)
 {
@@ -67,12 +68,12 @@ const char* GetTxnOutputType(txnouttype t)
 
 static bool MatchPayToPubkey(const CScript& script, valtype& pubkey)
 {
-    if (script.size() == CPubKey::PUBLIC_KEY_SIZE + 2 && script[0] == CPubKey::PUBLIC_KEY_SIZE && script.back() == OP_CHECKSIG) {
-        pubkey = valtype(script.begin() + 1, script.begin() + CPubKey::PUBLIC_KEY_SIZE + 1);
+    if (script.size() == CPubKey::SIZE + 2 && script[0] == CPubKey::SIZE && script.back() == OP_CHECKSIG) {
+        pubkey = valtype(script.begin() + 1, script.begin() + CPubKey::SIZE + 1);
         return CPubKey::ValidSize(pubkey);
     }
-    if (script.size() == CPubKey::COMPRESSED_PUBLIC_KEY_SIZE + 2 && script[0] == CPubKey::COMPRESSED_PUBLIC_KEY_SIZE && script.back() == OP_CHECKSIG) {
-        pubkey = valtype(script.begin() + 1, script.begin() + CPubKey::COMPRESSED_PUBLIC_KEY_SIZE + 1);
+    if (script.size() == CPubKey::COMPRESSED_SIZE + 2 && script[0] == CPubKey::COMPRESSED_SIZE && script.back() == OP_CHECKSIG) {
+        pubkey = valtype(script.begin() + 1, script.begin() + CPubKey::COMPRESSED_SIZE + 1);
         return CPubKey::ValidSize(pubkey);
     }
     return false;
@@ -128,32 +129,28 @@ txnouttype Solver(const CScript& scriptPubKeyIn, std::vector<std::vector<unsigne
     std::vector<unsigned char> vch1;
     CScript::const_iterator pc1 = scriptPubKeyIn.begin();
     size_t k;
-    for (k = 0; k < 3; ++k)
-    {
-        if (!scriptPubKeyIn.GetOp(pc1, opcode, vch1))
+    for (k = 0; k < 3; ++k) {
+        if (!scriptPubKeyIn.GetOp(pc1, opcode, vch1)) {
             break;
-
-        if (k == 0)
-        {
-            if (0 <= opcode && opcode <= OP_PUSHDATA4)
-            {
-            } else
-            {
+        }
+        if (k == 0) {
+            if (0 <= opcode && opcode <= OP_PUSHDATA4) {
+            } else {
                 break;
-            };
+            }
         } else
-        if (k == 1)
-        {
+        if (k == 1) {
             if (opcode != OP_CHECKLOCKTIMEVERIFY
-                && opcode != OP_CHECKSEQUENCEVERIFY)
+                && opcode != OP_CHECKSEQUENCEVERIFY) {
                 break;
+            }
         } else
-        if (k == 2)
-        {
-             if (opcode != OP_DROP)
+        if (k == 2) {
+             if (opcode != OP_DROP) {
                 break;
-        };
-    };
+            }
+        }
+    }
     bool fIsTimeLocked = k == 3;
 
     CScript scriptPubKeyTemp;
@@ -176,25 +173,23 @@ txnouttype Solver(const CScript& scriptPubKeyIn, std::vector<std::vector<unsigne
         return fIsTimeLocked ? TX_TIMELOCKED_SCRIPTHASH256 : TX_SCRIPTHASH256;
     }
 
-    if (!fParticlMode) {
-        int witnessversion;
-        std::vector<unsigned char> witnessprogram;
-        if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
-            if (witnessversion == 0 && witnessprogram.size() == WITNESS_V0_KEYHASH_SIZE) {
-                vSolutionsRet.push_back(witnessprogram);
-                return TX_WITNESS_V0_KEYHASH;
-            }
-            if (witnessversion == 0 && witnessprogram.size() == WITNESS_V0_SCRIPTHASH_SIZE) {
-                vSolutionsRet.push_back(witnessprogram);
-                return TX_WITNESS_V0_SCRIPTHASH;
-            }
-            if (witnessversion != 0) {
-                vSolutionsRet.push_back(std::vector<unsigned char>{(unsigned char)witnessversion});
-                vSolutionsRet.push_back(std::move(witnessprogram));
-                return TX_WITNESS_UNKNOWN;
-            }
-            return TX_NONSTANDARD;
+    int witnessversion;
+    std::vector<unsigned char> witnessprogram;
+    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+        if (witnessversion == 0 && witnessprogram.size() == WITNESS_V0_KEYHASH_SIZE) {
+            vSolutionsRet.push_back(witnessprogram);
+            return TX_WITNESS_V0_KEYHASH;
         }
+        if (witnessversion == 0 && witnessprogram.size() == WITNESS_V0_SCRIPTHASH_SIZE) {
+            vSolutionsRet.push_back(witnessprogram);
+            return TX_WITNESS_V0_SCRIPTHASH;
+        }
+        if (witnessversion != 0) {
+            vSolutionsRet.push_back(std::vector<unsigned char>{(unsigned char)witnessversion});
+            vSolutionsRet.push_back(std::move(witnessprogram));
+            return TX_WITNESS_UNKNOWN;
+        }
+        return TX_NONSTANDARD;
     }
 
     // Provably prunable, data-carrying output
@@ -255,17 +250,17 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
         if (!pubKey.IsValid())
             return false;
 
-        addressRet = pubKey.GetID();
+        addressRet = PKHash(pubKey);
         return true;
     }
     else if (whichType == TX_PUBKEYHASH || whichType == TX_TIMELOCKED_PUBKEYHASH)
     {
-        addressRet = CKeyID(uint160(vSolutions[0]));
+        addressRet = PKHash(uint160(vSolutions[0]));
         return true;
     }
     else if (whichType == TX_SCRIPTHASH || whichType == TX_TIMELOCKED_SCRIPTHASH)
     {
-        addressRet = CScriptID(uint160(vSolutions[0]));
+        addressRet = ScriptHash(uint160(vSolutions[0]));
         return true;
     } else if (whichType == TX_WITNESS_V0_KEYHASH) {
         WitnessV0KeyHash hash;
@@ -306,13 +301,12 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 
     if (HasIsCoinstakeOp(scriptPubKey)) {
         CScript scriptB;
-        if (!GetNonCoinstakeScriptPath(scriptPubKey, scriptB))
+        if (!GetNonCoinstakeScriptPath(scriptPubKey, scriptB)) {
+            typeRet = TX_NONSTANDARD;
             return false;
-
+        }
         // Return only the spending address to keep insight working
-        ExtractDestinations(scriptB, typeRet, addressRet, nRequiredRet);
-
-        return true;
+        return ExtractDestinations(scriptB, typeRet, addressRet, nRequiredRet);
     }
 
     typeRet = Solver(scriptPubKey, vSolutions);
@@ -332,7 +326,7 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
             if (!pubKey.IsValid())
                 continue;
 
-            CTxDestination address = pubKey.GetID();
+            CTxDestination address = PKHash(pubKey);
             addressRet.push_back(address);
         }
 
@@ -353,26 +347,22 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 
 bool ExtractStakingKeyID(const CScript &scriptPubKey, CKeyID &keyID)
 {
-    if (scriptPubKey.IsPayToPublicKeyHash())
-    {
+    if (scriptPubKey.IsPayToPublicKeyHash()) {
         keyID = CKeyID(uint160(&scriptPubKey[3], 20));
         return true;
-    };
+    }
 
-    if (scriptPubKey.IsPayToPublicKeyHash256())
-    {
+    if (scriptPubKey.IsPayToPublicKeyHash256()) {
         keyID = CKeyID(uint256(&scriptPubKey[3], 32));
         return true;
-    };
+    }
 
     if (scriptPubKey.IsPayToPublicKeyHash256_CS()
         || scriptPubKey.IsPayToScriptHash256_CS()
-        || scriptPubKey.IsPayToScriptHash_CS()
-        )
-    {
+        || scriptPubKey.IsPayToScriptHash_CS()) {
         keyID = CKeyID(uint160(&scriptPubKey[5], 20));
         return true;
-    };
+    }
 
     return false;
 };
@@ -391,13 +381,13 @@ public:
         return false;
     }
 
-    bool operator()(const CKeyID &keyID) const {
+    bool operator()(const PKHash &keyID) const {
         script->clear();
         *script << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
         return true;
     }
 
-    bool operator()(const CScriptID &scriptID) const {
+    bool operator()(const ScriptHash &scriptID) const {
         script->clear();
         *script << OP_HASH160 << ToByteVector(scriptID) << OP_EQUAL;
         return true;

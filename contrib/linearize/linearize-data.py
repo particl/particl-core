@@ -7,7 +7,6 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #
 
-from __future__ import print_function, division
 import struct
 import re
 import os
@@ -17,7 +16,7 @@ import hashlib
 import datetime
 import time
 from collections import namedtuple
-from binascii import hexlify, unhexlify
+from binascii import unhexlify
 
 settings = {}
 
@@ -62,7 +61,7 @@ def calc_hash_str(blk_hdr):
     hash = calc_hdr_hash(blk_hdr)
     hash = bufreverse(hash)
     hash = wordreverse(hash)
-    hash_str = hexlify(hash).decode('utf-8')
+    hash_str = hash.hex()
     return hash_str
 
 def get_blk_dt(blk_hdr):
@@ -214,12 +213,15 @@ class BlockDataCopier:
 
             inMagic = inhdr[:4]
             if (inMagic != self.settings['netmagic']):
-                print("Invalid magic: " + hexlify(inMagic).decode('utf-8'))
-                return
+                # Seek backwards 7 bytes (skipping the first byte in the previous search)
+                # and continue searching from the new position if the magic bytes are not
+                # found.
+                self.inF.seek(-7, os.SEEK_CUR)
+                continue
             inLenLE = inhdr[4:]
             su = struct.unpack("<I", inLenLE)
-            inLen = su[0] - 80 # length without header
-            blk_hdr = self.inF.read(80)
+            inLen = su[0] - settings['blkhdr_size'] # length without header
+            blk_hdr = self.inF.read(settings['blkhdr_size'])
             inExtent = BlockExtent(self.inFn, self.inF.tell(), inhdr, blk_hdr, inLen)
 
             self.hash_str = calc_hash_str(blk_hdr)
@@ -264,12 +266,12 @@ if __name__ == '__main__':
     f = open(sys.argv[1], encoding="utf8")
     for line in f:
         # skip comment lines
-        m = re.search('^\s*#', line)
+        m = re.search(r'^\s*#', line)
         if m:
             continue
 
         # parse key=value lines
-        m = re.search('^(\w+)\s*=\s*(\S.*)$', line)
+        m = re.search(r'^(\w+)\s*=\s*(\S.*)$', line)
         if m is None:
             continue
         settings[m.group(1)] = m.group(2)
@@ -299,6 +301,8 @@ if __name__ == '__main__':
         settings['out_of_order_cache_sz'] = 100 * 1000 * 1000
     if 'debug_output' not in settings:
         settings['debug_output'] = 'false'
+    if 'blkhdr_size' not in settings:
+        settings['blkhdr_size'] = 112
 
     settings['max_out_sz'] = int(settings['max_out_sz'])
     settings['split_timestamp'] = int(settings['split_timestamp'])
@@ -306,6 +310,7 @@ if __name__ == '__main__':
     settings['netmagic'] = unhexlify(settings['netmagic'].encode('utf-8'))
     settings['out_of_order_cache_sz'] = int(settings['out_of_order_cache_sz'])
     settings['debug_output'] = settings['debug_output'].lower()
+    settings['blkhdr_size'] = int(settings['blkhdr_size'])
 
     if 'output_file' not in settings and 'output' not in settings:
         print("Missing output file / directory")

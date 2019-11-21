@@ -8,4 +8,3 @@ Description: Library for the Particl consensus protocol.
 Version: @PACKAGE_VERSION@
 Libs: -L${libdir} -lparticlconsensus
 Cflags: -I${includedir}
-Requires.private: libcrypto

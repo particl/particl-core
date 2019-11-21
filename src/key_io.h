@@ -90,17 +90,16 @@ public:
     bool IsValid(CChainParams::Base58Type prefix) const;
 
     CBitcoinAddress() {}
-    CBitcoinAddress(const CTxDestination &dest) { Set(dest); }
-    CBitcoinAddress(const CTxDestination &dest, bool fBech32) { Set(dest, fBech32); }
-    CBitcoinAddress(const std::string& strAddress) { SetString(strAddress); }
-    CBitcoinAddress(const char* pszAddress) { SetString(pszAddress); }
+    explicit CBitcoinAddress(const CTxDestination &dest) { Set(dest); }
+    explicit CBitcoinAddress(const CTxDestination &dest, bool fBech32) { Set(dest, fBech32); }
+    explicit CBitcoinAddress(const std::string& strAddress) { SetString(strAddress); }
+    explicit CBitcoinAddress(const char* pszAddress) { SetString(pszAddress); }
 
     CTxDestination Get() const;
     CTxDestination GetStakeOnly() const;
     bool GetKeyID(CKeyID &keyID) const;
     bool GetKeyID(CKeyID256 &keyID) const;
     bool GetKeyID(CKeyID &keyID, CChainParams::Base58Type prefix) const;
-    bool GetIndexKey(uint256 &hashBytes, int &type) const;
     bool IsScript() const;
 
     uint8_t getVersion()
@@ -133,7 +132,7 @@ public:
     bool SetString(const char* pszSecret);
     bool SetString(const std::string& strSecret);
 
-    CBitcoinSecret(const CKey& vchSecret) { SetKey(vchSecret); }
+    explicit CBitcoinSecret(const CKey& vchSecret) { SetKey(vchSecret); }
     CBitcoinSecret() {}
 };
 
@@ -174,11 +173,11 @@ public:
         return ret;
     }
 
-    CBitcoinExtKeyBase(const K &key) {
+    explicit CBitcoinExtKeyBase(const K &key) {
         SetKey(key);
     }
 
-    CBitcoinExtKeyBase(const std::string& strBase58c) {
+    explicit CBitcoinExtKeyBase(const std::string& strBase58c) {
         SetString(strBase58c.c_str(), Params().Base58Prefix(Type).size());
     }
 

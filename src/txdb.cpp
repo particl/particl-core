@@ -5,16 +5,18 @@
 
 #include <txdb.h>
 
-#include <chainparams.h>
-#include <hash.h>
-#include <random.h>
 #include <pow.h>
+#include <random.h>
 #include <shutdown.h>
+#include <ui_interface.h>
 #include <uint256.h>
 #include <util/system.h>
-#include <ui_interface.h>
+#include <util/translation.h>
+#include <util/vector.h>
+
 #include <validation.h>
 #include <insight/insight.h>
+#include <chainparams.h>
 
 #include <stdint.h>
 
@@ -68,7 +70,7 @@ struct CoinEntry {
 
 }
 
-CCoinsViewDB::CCoinsViewDB(size_t nCacheSize, bool fMemory, bool fWipe) : db(GetDataDir() / "chainstate", nCacheSize, fMemory, fWipe, true, false, 64)
+CCoinsViewDB::CCoinsViewDB(fs::path ldb_path, size_t nCacheSize, bool fMemory, bool fWipe) : db(ldb_path, nCacheSize, fMemory, fWipe, true, false, 64)
 {
 }
 
@@ -118,7 +120,7 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock) {
     // A vector is used for future extensibility, as we may want to support
     // interrupting after partial writes from multiple independent reorgs.
     batch.Erase(DB_BEST_BLOCK);
-    batch.Write(DB_HEAD_BLOCKS, std::vector<uint256>{hashBlock, old_tip});
+    batch.Write(DB_HEAD_BLOCKS, Vector(hashBlock, old_tip));
 
     for (CCoinsMap::iterator it = mapCoins.begin(); it != mapCoins.end();) {
         if (it->second.flags & CCoinsCacheEntry::DIRTY) {
@@ -161,8 +163,7 @@ size_t CCoinsViewDB::EstimateSize() const
     return db.EstimateSize(DB_COIN, (char)(DB_COIN+1));
 }
 
-CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe, bool compression, int maxOpenFiles) : CDBWrapper(gArgs.IsArgSet("-blocksdir") ? GetDataDir() / "blocks" / "index" : GetBlocksDir() / "index", nCacheSize, fMemory, fWipe, false, compression, maxOpenFiles)
-{
+CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe, bool compression, int maxOpenFiles) : CDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe, false, compression, maxOpenFiles) {
 }
 
 bool CBlockTreeDB::ReadBlockFileInfo(int nFile, CBlockFileInfo &info) {
@@ -363,23 +364,31 @@ bool CBlockTreeDB::ReadTimestampIndex(const unsigned int &high, const unsigned i
 
     pcursor->Seek(std::make_pair(DB_TIMESTAMPINDEX, CTimestampIndexIteratorKey(low)));
 
-    while (pcursor->Valid())
-    {
-        boost::this_thread::interruption_point();
-        std::pair<char, CTimestampIndexKey> key;
-        if (pcursor->GetKey(key) && key.first == DB_TIMESTAMPINDEX && key.second.timestamp < high)
-        {
-            if (fActiveOnly) {
+    if (fActiveOnly) {
+        LockAssertion lock(::cs_main); // cs_main is locked before GetTimestampIndex if fActiveOnly
+        while (pcursor->Valid()) {
+            boost::this_thread::interruption_point();
+            std::pair<char, CTimestampIndexKey> key;
+            if (pcursor->GetKey(key) && key.first == DB_TIMESTAMPINDEX && key.second.timestamp < high) {
                 if (HashOnchainActive(key.second.blockHash)) {
                     hashes.push_back(std::make_pair(key.second.blockHash, key.second.timestamp));
                 }
+                pcursor->Next();
             } else {
-                hashes.push_back(std::make_pair(key.second.blockHash, key.second.timestamp));
+                break;
             }
-
-            pcursor->Next();
-        } else {
-            break;
+        }
+    } else {
+        // Otherwise get: requires holding mutex
+        while (pcursor->Valid()) {
+            boost::this_thread::interruption_point();
+            std::pair<char, CTimestampIndexKey> key;
+            if (pcursor->GetKey(key) && key.first == DB_TIMESTAMPINDEX && key.second.timestamp < high) {
+                hashes.push_back(std::make_pair(key.second.blockHash, key.second.timestamp));
+                pcursor->Next();
+            } else {
+                break;
+            }
         }
     }
 
@@ -395,8 +404,9 @@ bool CBlockTreeDB::WriteTimestampBlockIndex(const CTimestampBlockIndexKey &block
 bool CBlockTreeDB::ReadTimestampBlockIndex(const uint256 &hash, unsigned int &ltimestamp) {
 
     CTimestampBlockIndexValue lts;
-    if (!Read(std::make_pair(DB_BLOCKHASHINDEX, hash), lts))
+    if (!Read(std::make_pair(DB_BLOCKHASHINDEX, hash), lts)) {
         return false;
+    }
 
     ltimestamp = lts.ltimestamp;
     return true;
@@ -420,9 +430,10 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
 
     pcursor->Seek(std::make_pair(DB_BLOCK_INDEX, uint256()));
 
-    // Load mapBlockIndex
+    // Load m_block_index
     while (pcursor->Valid()) {
         boost::this_thread::interruption_point();
+        if (ShutdownRequested()) return false;
         std::pair<char, uint256> key;
         if (pcursor->GetKey(key) && key.first == DB_BLOCK_INDEX) {
             CDiskBlockIndex diskindex;
@@ -456,17 +467,15 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                     && pindexNew->GetBlockHash() != Params().GetConsensus().hashGenesisBlock)
                     return error("LoadBlockIndex(): Genesis block hash incorrect: %s", pindexNew->ToString());
 
-                if (fParticlMode)
-                {
+                if (fParticlMode) {
                     // only CheckProofOfWork for genesis blocks
                     if (diskindex.hashPrev.IsNull() && !CheckProofOfWork(pindexNew->GetBlockHash(),
                         pindexNew->nBits, Params().GetConsensus(), 0, Params().GetLastImportHeight()))
                         return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
                 } else
-                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, Params().GetConsensus()))
-                {
+                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, Params().GetConsensus())) {
                     return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
-                };
+                }
 
                 pcursor->Next();
             } else {
@@ -614,7 +623,7 @@ bool CCoinsViewDB::Upgrade() {
     int64_t count = 0;
     LogPrintf("Upgrading utxo-set database...\n");
     LogPrintf("[0%%]...\n"); / Continued /
-    uiInterface.ShowProgress(_("Upgrading UTXO database"), 0, true);
+    uiInterface.ShowProgress(_("Upgrading UTXO database").translated, 0, true);
     size_t batch_size = 1 << 24;
     CDBBatch batch(db);
     int reportDone = 0;
@@ -629,7 +638,7 @@ bool CCoinsViewDB::Upgrade() {
             if (count++ % 256 == 0) {
                 uint32_t high = 0x100 * *key.second.begin() + *(key.second.begin() + 1);
                 int percentageDone = (int)(high * 100.0 / 65536.0 + 0.5);
-                uiInterface.ShowProgress(_("Upgrading UTXO database"), percentageDone, true);
+                uiInterface.ShowProgress(_("Upgrading UTXO database").translated, percentageDone, true);
                 if (reportDone < percentageDone/10) {
                     // report max. every 10% step
                     LogPrintf("[%d%%]...\n", percentageDone); / Continued /

@@ -4,22 +4,16 @@ export LC_ALL=C
 KNOWN_VIOLATIONS=(
     "src/bitcoin-tx.cpp.*stoul"
     "src/bitcoin-tx.cpp.*trim_right"
-    "src/bitcoin-tx.cpp:.*atoi"
-    "src/core_read.cpp.*is_digit"
     "src/dbwrapper.cpp.*stoul"
     "src/dbwrapper.cpp:.*vsnprintf"
     "src/httprpc.cpp.*trim"
     "src/init.cpp:.*atoi"
     "src/qt/rpcconsole.cpp:.*atoi"
-    "src/qt/rpcconsole.cpp:.*isdigit"
     "src/rest.cpp:.*strtol"
     "src/test/dbwrapper_tests.cpp:.*snprintf"
-    "src/test/getarg_tests.cpp.*split"
     "src/torcontrol.cpp:.*atoi"
     "src/torcontrol.cpp:.*strtol"
     "src/uint256.cpp:.*tolower"
-    "src/util/system.cpp:.*atoi"
-    "src/util/system.cpp:.*fprintf"
     "src/util/system.cpp:.*tolower"
     "src/util/system.cpp:.*isspace"
     "src/util/system.cpp:.*mktime"
@@ -28,10 +22,10 @@ KNOWN_VIOLATIONS=(
     "src/util/moneystr.cpp:.*isdigit"
     "src/util/strencodings.cpp:.*atoi"
     "src/util/strencodings.cpp:.*strtol"
-    "src/util/strencodings.cpp:.*strtoll"
     "src/util/strencodings.cpp:.*strtoul"
-    "src/util/strencodings.cpp:.*strtoull"
     "src/util/strencodings.h:.*atoi"
+    "src/util/system.cpp:.*atoi"
+    "src/util/system.cpp:.*fprintf"
     "src/smsg/smessage.h:.*fprintf"
     "src/rpc/anon.cpp:.*isdigit"
     "src/smsg/smessage.cpp:.*fprintf"
@@ -121,7 +115,7 @@ LOCALE_DEPENDENT_FUNCTIONS=(
     mbtowc       # LC_CTYPE
     mktime
     normalize    # boost::locale::normalize
-#   printf       # LC_NUMERIC
+    printf       # LC_NUMERIC
     putwc
     putwchar
     scanf        # LC_NUMERIC
@@ -225,8 +219,7 @@ GIT_GREP_OUTPUT=$(git grep -E "[^a-zA-Z0-9_\`'\"<>](${REGEXP_LOCALE_DEPENDENT_FU
 EXIT_CODE=0
 for LOCALE_DEPENDENT_FUNCTION in "${LOCALE_DEPENDENT_FUNCTIONS[@]}"; do
     MATCHES=$(grep -E "[^a-zA-Z0-9_\`'\"<>]${LOCALE_DEPENDENT_FUNCTION}(_r|_s)?[^a-zA-Z0-9_\`'\"<>]" <<< "${GIT_GREP_OUTPUT}" | \
-        grep -vE "\.(c|cpp|h):\s*(//|\*|/\*|\").*${LOCALE_DEPENDENT_FUNCTION}" | \
-        grep -vE 'fprintf\(.*(stdout|stderr)')
+        grep -vE "\.(c|cpp|h):\s*(//|\*|/\*|\").*${LOCALE_DEPENDENT_FUNCTION}")
     if [[ ${REGEXP_IGNORE_EXTERNAL_DEPENDENCIES} != "" ]]; then
         MATCHES=$(grep -vE "${REGEXP_IGNORE_EXTERNAL_DEPENDENCIES}" <<< "${MATCHES}")
     fi

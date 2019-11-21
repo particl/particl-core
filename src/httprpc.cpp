@@ -5,20 +5,18 @@
 #include <httprpc.h>
 
 #include <chainparams.h>
+#include <crypto/hmac_sha256.h>
 #include <httpserver.h>
-#include <key_io.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
-#include <random.h>
-#include <sync.h>
-#include <util/system.h>
-#include <util/strencodings.h>
 #include <ui_interface.h>
+#include <util/strencodings.h>
+#include <util/system.h>
+#include <util/translation.h>
 #include <walletinitinterface.h>
-#include <crypto/hmac_sha256.h>
-#include <stdio.h>
 
 #include <memory>
+#include <stdio.h>
 
 #include <boost/algorithm/string.hpp> // boost::trim
 
@@ -114,7 +112,7 @@ static bool multiUserAuthorized(std::string strUserPass)
         static const unsigned int KEY_SIZE = 32;
         unsigned char out[KEY_SIZE];
 
-        CHMAC_SHA256(reinterpret_cast<const unsigned char*>(strSalt.c_str()), strSalt.size()).Write(reinterpret_cast<const unsigned char*>(strPass.c_str()), strPass.size()).Finalize(out);
+        CHMAC_SHA256(reinterpret_cast<const unsigned char*>(strSalt.data()), strSalt.size()).Write(reinterpret_cast<const unsigned char*>(strPass.data()), strPass.size()).Finalize(out);
         std::vector<unsigned char> hexvec(out, out+KEY_SIZE);
         std::string strHashFromPass = HexStr(hexvec);
 
@@ -228,7 +226,7 @@ static bool InitRPCAuthentication()
         LogPrintf("No rpcpassword set - using random cookie authentication.\n");
         if (!GenerateAuthCookie(&strRPCUserColonPass)) {
             uiInterface.ThreadSafeMessageBox(
-                _("Error: A fatal internal error occurred, see debug.log for details"), // Same message as AbortNode
+                _("Error: A fatal internal error occurred, see debug.log for details").translated, // Same message as AbortNode
                 "", CClientUIInterface::MSG_ERROR);
             return false;
         }

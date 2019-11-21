@@ -8,7 +8,7 @@
 #
 
 from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
+from test_framework.util import connect_nodes, assert_equal
 
 
 class TxIndexTest(ParticlTestFramework):
@@ -50,7 +50,7 @@ class TxIndexTest(ParticlTestFramework):
 
         print('Testing transaction index...')
 
-        ro = nodes[1].extkeyimportmaster('graine article givre hublot encadrer admirer stipuler capsule acajou paisible soutirer organe')
+        nodes[1].extkeyimportmaster('graine article givre hublot encadrer admirer stipuler capsule acajou paisible soutirer organe')
         addr1 = nodes[1].getnewaddress()
 
         txid = nodes[0].sendtoaddress(addr1, 5)
@@ -59,8 +59,8 @@ class TxIndexTest(ParticlTestFramework):
         verbose = self.nodes[0].getrawtransaction(txid, 1)
         assert(len(verbose['vout']) == 2)
 
-        str0 = json.dumps(verbose['vout'][0], indent=4, default=self.jsonDecimal)
-        str1 = json.dumps(verbose['vout'][1], indent=4, default=self.jsonDecimal)
+        str0 = self.dumpj(verbose['vout'][0])
+        str1 = self.dumpj(verbose['vout'][1])
         if addr1 in str0:
             assert_equal(verbose['vout'][0]['valueSat'], 500000000)
             assert_equal(verbose['vout'][0]['value'], 5)
@@ -69,6 +69,10 @@ class TxIndexTest(ParticlTestFramework):
             assert_equal(verbose['vout'][1]['value'], 5)
         else:
             assert(False)
+
+        ro = nodes[0].gettxoutsetinfobyscript()
+        assert(ro['height'] == 0)
+        assert(ro['paytopubkeyhash']['num_plain'] == 15)
 
         print('Passed\n')
 

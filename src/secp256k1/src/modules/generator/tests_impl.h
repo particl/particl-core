@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "group.h"
 #include "scalar.h"
 #include "testrand.h"
 #include "util.h"

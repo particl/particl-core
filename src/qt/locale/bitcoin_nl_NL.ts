@@ -181,7 +181,7 @@
     </message>
     <message>
         <source>%1 will close now to finish the encryption process. Remember that encrypting your wallet cannot fully protect your particl from being stolen by malware infecting your computer.</source>
-        <translation>%1 zal nu sluiten om het versleutel proces te voltooien. Onthoudt dat het versleutelen van je portemonnee jouw particl niet volledig van diefstal via malware kan beschermen.</translation>
+        <translation>%1 zal nu sluiten om het versleutel proces te voltooien. Onthoudt dat het versleutelen van je portemonnee jouw particls niet volledig van diefstal via malware kan beschermen.</translation>
     </message>
     <message>
         <source>IMPORTANT: Any previous backups you have made of your wallet file should be replaced with the newly generated, encrypted wallet file. For security reasons, previous backups of the unencrypted wallet file will become useless as soon as you start using the new, encrypted wallet.</source>
@@ -708,12 +708,64 @@
 <context>
     <name>OptionsDialog</name>
     <message>
+        <source>Use separate SOCKS&amp;5 proxy to reach peers via Tor hidden services:</source>
+        <translation>Gebruike aparte SOCKS&amp;5 proxy om peers te bereiken via Tor hidden services</translation>
+    </message>
+    <message>
+        <source>Hide the icon from the system tray.</source>
+        <translation>Verberg het icoontje van de taakbalk</translation>
+    </message>
+    <message>
+        <source>Open Configuration File</source>
+        <translation>Open Configuratie Bestand</translation>
+    </message>
+    <message>
+        <source>Expert</source>
+        <translation>Expert</translation>
+    </message>
+    <message>
+        <source>Map port using &amp;UPnP</source>
+        <translation>Poort mappen met &amp;UPnP</translation>
+    </message>
+    <message>
+        <source>IPv4</source>
+        <translation>IPv4</translation>
+    </message>
+    <message>
+        <source>IPv6</source>
+        <translation>IPv6</translation>
+    </message>
+    <message>
+        <source>Tor</source>
+        <translation>Tor</translation>
+    </message>
+    <message>
         <source>Error</source>
         <translation>Fout</translation>
     </message>
-    </context>
+    <message>
+        <source>The supplied proxy address is invalid.</source>
+        <translation>Het ingegeven proxy adres is ongeldig</translation>
+    </message>
+</context>
 <context>
     <name>OverviewPage</name>
+    <message>
+        <source>Available:</source>
+        <translation>Beschikbaar:</translation>
+    </message>
+    <message>
+        <source>Balances</source>
+        <translation>Saldi</translation>
+    </message>
+    <message>
+        <source>Total:</source>
+        <translation>Totaal:</translation>
+    </message>
+    <message>
+        <source>Recent transactions</source>
+        <translation>Recente transacties</translation>
+    </message>
     </context>
 <context>
     <name>PaymentServer</name>
@@ -765,6 +817,10 @@
     <message>
         <source>Label</source>
         <translation>Label</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Portemonnee</translation>
     </message>
     </context>
 <context>

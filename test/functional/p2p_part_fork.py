@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
+import time
+
+from test_framework.test_particl import ParticlTestFramework, connect_nodes_bi
+from test_framework.authproxy import JSONRPCException
+
 
 class ForkTest(ParticlTestFramework):
     def set_test_params(self):
@@ -44,6 +47,7 @@ class ForkTest(ParticlTestFramework):
         nodes[3].extkeyimportmaster('abandon baby cabbage dad eager fabric gadget habit ice kangaroo lab absorb')
         assert(nodes[3].getwalletinfo()['total_balance'] == 100000)
 
+        n0_wi_before = nodes[0].getwalletinfo()
 
         # start staking
         nBlocksShorterChain = 2
@@ -118,9 +122,22 @@ class ForkTest(ParticlTestFramework):
 
         ro = nodes[0].getblockchaininfo()
         assert(ro['blocks'] == 5)
-
         ro = nodes[3].getblockchaininfo()
         assert(ro['blocks'] == 5)
+
+        n0_wi_after = nodes[0].getwalletinfo()
+
+        assert(n0_wi_after['total_balance'] == n0_wi_before['total_balance'])
+        assert(n0_wi_before['txcount'] == 1)
+        assert(n0_wi_after['txcount'] == 3)
+
+        n0_ft = nodes[0].filtertransactions()
+        assert(len(n0_ft) == 3)
+        assert(n0_ft[0]['category'] == 'orphaned_stake')
+        assert(n0_ft[1]['category'] == 'orphaned_stake')
+        n0_lt = nodes[0].listtransactions()
+        assert(n0_lt[-1]['category'] == 'orphaned_stake')
+        assert(n0_lt[-2]['category'] == 'orphaned_stake')
 
 
 if __name__ == '__main__':

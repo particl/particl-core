@@ -9,7 +9,6 @@
 #include <compat/endian.h>
 
 #include <algorithm>
-#include <assert.h>
 #include <ios>
 #include <limits>
 #include <map>
@@ -422,11 +421,10 @@ I ReadVarInt(Stream& is)
 inline int PutVarInt(std::vector<uint8_t> &v, uint64_t i)
 {
     uint8_t b = i & 0x7F;
-    while ((i = i >> 7) > 0)
-    {
+    while ((i = i >> 7) > 0) {
         v.push_back(b | 0x80);
         b = i & 0x7F;
-    };
+    }
     v.push_back(b);
     return i; // 0 == success
 };
@@ -435,12 +433,11 @@ inline int PutVarInt(uint8_t *p, uint64_t i)
 {
     int nBytes = 0;
     uint8_t b = i & 0x7F;
-    while ((i = i >> 7) > 0)
-    {
+    while ((i = i >> 7) > 0) {
         *p++ = b | 0x80;
         b = i & 0x7F;
         nBytes++;
-    };
+    }
     *p++ = b;
     nBytes++;
     return nBytes;
@@ -449,22 +446,18 @@ inline int PutVarInt(uint8_t *p, uint64_t i)
 inline int GetVarInt(const std::vector<uint8_t> &v, size_t ofs, uint64_t &i, size_t &nB)
 {
     size_t ml = v.size() - ofs;
-    if (ml <= 0)
+    if (ml <= 0) {
         return 0;
-
+    }
     const uint8_t *p = &v[ofs];
-
     nB = 0;
     i = p[nB++] & 0x7F;
-
-    while (p[nB-1] & 0x80)
-    {
+    while (p[nB-1] & 0x80) {
         if (nB >= ml)
             return 1;
         i += ((uint64_t(p[nB]& 0x7F)) << (7*nB));
         nB++;
-    };
-
+    }
     return 0; // 0 == success
 };
 
@@ -604,6 +597,7 @@ template<typename Stream, unsigned int N, typename T> inline void Unserialize(St
  * vectors of unsigned char are a special case and are intended to be serialized as a single opaque blob.
  */
 template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, const unsigned char&);
+template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, const bool&);
 template<typename Stream, typename T, typename A, typename V> void Serialize_impl(Stream& os, const std::vector<T, A>& v, const V&);
 template<typename Stream, typename T, typename A> inline void Serialize(Stream& os, const std::vector<T, A>& v);
 template<typename Stream, typename T, typename A> void Unserialize_impl(Stream& is, std::vector<T, A>& v, const unsigned char&);
@@ -719,7 +713,7 @@ void Unserialize_impl(Stream& is, prevector<N, T>& v, const unsigned char&)
     while (i < nSize)
     {
         unsigned int blk = std::min(nSize - i, (unsigned int)(1 + 4999999 / sizeof(T)));
-        v.resize(i + blk);
+        v.resize_uninitialized(i + blk);
         is.read((char*)&v[i], blk * sizeof(T));
         i += blk;
     }
@@ -737,8 +731,8 @@ void Unserialize_impl(Stream& is, prevector<N, T>& v, const V&)
         nMid += 5000000 / sizeof(T);
         if (nMid > nSize)
             nMid = nSize;
-        v.resize(nMid);
-        for (; i < nMid; i++)
+        v.resize_uninitialized(nMid);
+        for (; i < nMid; ++i)
             Unserialize(is, v[i]);
     }
 }
@@ -760,6 +754,18 @@ void Serialize_impl(Stream& os, const std::vector<T, A>& v, const unsigned char&
     WriteCompactSize(os, v.size());
     if (!v.empty())
         os.write((char*)v.data(), v.size() * sizeof(T));
+}
+
+template<typename Stream, typename T, typename A>
+void Serialize_impl(Stream& os, const std::vector<T, A>& v, const bool&)
+{
+    // A special case for std::vector<bool>, as dereferencing
+    // std::vector<bool>::const_iterator does not result in a const bool&
+    // due to std::vector's special casing for bool arguments.
+    WriteCompactSize(os, v.size());
+    for (bool elem : v) {
+        ::Serialize(os, elem);
+    }
 }
 
 template<typename Stream, typename T, typename A, typename V>

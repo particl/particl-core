@@ -11,7 +11,6 @@
 #include <serialize.h>
 #include <streams.h>
 #include <univalue.h>
-#include <util/system.h>
 #include <util/strencodings.h>
 #include <version.h>
 
@@ -183,23 +182,6 @@ bool DecodeHexBlk(CBlock& block, const std::string& strHexBlk)
         return false;
     }
 
-    return true;
-}
-
-bool DecodePSBT(PartiallySignedTransaction& psbt, const std::string& base64_tx, std::string& error)
-{
-    std::vector<unsigned char> tx_data = DecodeBase64(base64_tx.c_str());
-    CDataStream ss_data(tx_data, SER_NETWORK, PROTOCOL_VERSION);
-    try {
-        ss_data >> psbt;
-        if (!ss_data.empty()) {
-            error = "extra data after PSBT";
-            return false;
-        }
-    } catch (const std::exception& e) {
-        error = e.what();
-        return false;
-    }
     return true;
 }
 

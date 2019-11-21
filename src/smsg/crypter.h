@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,6 @@
 
 #include <support/allocators/secure.h>
 #include <vector>
-#include <string.h>
 
 const unsigned int SMSG_CRYPTO_KEY_SIZE = 32;
 const unsigned int SMSG_CRYPTO_SALT_SIZE = 8;
@@ -26,12 +25,12 @@ public:
         fKeySet = false;
         vchKey.resize(SMSG_CRYPTO_KEY_SIZE);
         vchIV.resize(SMSG_CRYPTO_IV_SIZE);
-    };
+    }
 
     ~SecMsgCrypter()
     {
         CleanKey();
-    };
+    }
 
     void CleanKey()
     {

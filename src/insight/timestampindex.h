@@ -23,7 +23,7 @@ struct CTimestampIndexIteratorKey {
         timestamp = ser_readdata32be(s);
     }
 
-    CTimestampIndexIteratorKey(unsigned int time) {
+    explicit CTimestampIndexIteratorKey(unsigned int time) {
         timestamp = time;
     }
 
@@ -54,7 +54,7 @@ struct CTimestampIndexKey {
         blockHash.Unserialize(s);
     }
 
-    CTimestampIndexKey(unsigned int time, uint256 hash) {
+    explicit CTimestampIndexKey(unsigned int time, uint256 hash) {
         timestamp = time;
         blockHash = hash;
     }
@@ -86,7 +86,7 @@ struct CTimestampBlockIndexKey {
         blockHash.Unserialize(s);
     }
 
-    CTimestampBlockIndexKey(uint256 hash) {
+    explicit CTimestampBlockIndexKey(uint256 hash) {
         blockHash = hash;
     }
 
@@ -115,7 +115,7 @@ struct CTimestampBlockIndexValue {
         ltimestamp = ser_readdata32be(s);
     }
 
-    CTimestampBlockIndexValue (unsigned int time) {
+    explicit CTimestampBlockIndexValue (unsigned int time) {
         ltimestamp = time;
     }
 

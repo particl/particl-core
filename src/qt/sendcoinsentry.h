@@ -26,7 +26,7 @@ class SendCoinsEntry : public QStackedWidget
     Q_OBJECT
 
 public:
-    explicit SendCoinsEntry(const PlatformStyle *platformStyle, QWidget *parent = 0, bool coldstake = false);
+    explicit SendCoinsEntry(const PlatformStyle *platformStyle, QWidget *parent = nullptr, bool coldstake = false);
     ~SendCoinsEntry();
 
     void setModel(WalletModel *model);

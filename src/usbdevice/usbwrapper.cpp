@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <logging.h>
-#include <util/strencodings.h>
 
 namespace usb_device {
 
@@ -396,7 +395,7 @@ int webusb_write(webusb_device *dev, const unsigned char *data, size_t length)
         return -1;
     }
 
-    if (transferred < length) {
+    if (transferred < (int) length) {
         LogPrintf("%s: Under write %d / %d.\n", __func__, transferred, length);
         return -1;
     }
@@ -422,7 +421,7 @@ int webusb_read_timeout(webusb_device *dev, unsigned char *data, size_t length, 
         return -1;
     }
 
-    if (transferred < length) {
+    if (transferred < (int) length) {
         LogPrintf("%s: Under read %d / %d.\n", __func__, transferred, length);
         return -1;
     }

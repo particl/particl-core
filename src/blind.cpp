@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2018 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
@@ -84,7 +84,10 @@ int SelectRangeProofParameters(uint64_t nValueIn, uint64_t &minValue, int &expon
     // TODO: how to pick best?
 
     int eMin = nDiv10 / 2;
-    exponent = eMin + GetRandInt(nDiv10-eMin);
+    exponent = eMin;
+    if (nDiv10-eMin > 0) {
+        exponent += GetRandInt(nDiv10-eMin);
+    }
 
     nTest = nValueIn / ipow(10, exponent);
 
@@ -108,6 +111,13 @@ int SelectRangeProofParameters(uint64_t nValueIn, uint64_t &minValue, int &expon
 
 int GetRangeProofInfo(const std::vector<uint8_t> &vRangeproof, int &rexp, int &rmantissa, CAmount &min_value, CAmount &max_value)
 {
+    if (vRangeproof.size() > 500 && vRangeproof.size() < 1000) { // v2
+        rexp = -1;
+        rmantissa = -1;
+        min_value = 0;
+        max_value = 0x7FFFFFFFFFFFFFFFl; // largest signed
+        return true;
+    }
     return (!(secp256k1_rangeproof_info(secp256k1_ctx_blind,
         &rexp, &rmantissa, (uint64_t*) &min_value, (uint64_t*) &max_value,
         &vRangeproof[0], vRangeproof.size()) == 1));

@@ -7,8 +7,6 @@
 
 #include <validationinterface.h>
 #include <netaddress.h>
-#include <string>
-#include <map>
 #include <list>
 #include <thread>
 #include <atomic>
@@ -35,7 +33,7 @@ protected:
     // CValidationInterface
     void TransactionAddedToMempool(const CTransactionRef& tx) override;
     void BlockConnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindexConnected, const std::vector<CTransactionRef>& vtxConflicted) override;
-    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock) override;
+    void BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindexDisconnected) override;
     void UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) override;
 
     void TransactionAddedToWallet(const std::string &sWalletName, const CTransactionRef& tx) override;

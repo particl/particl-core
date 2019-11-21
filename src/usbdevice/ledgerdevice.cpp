@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Particl Core developers
+// Copyright (c) 2018-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,18 +6,12 @@
 
 #include <hidapi/hidapi.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <util/system.h>
-#include <util/strencodings.h>
+#include <coins.h>
 #include <pubkey.h>
 #include <crypto/common.h>
-#include <univalue.h>
 #include <chainparams.h>
-#include <validation.h>
-
-#ifdef ENABLE_WALLET
-#include <wallet/hdwallet.h>
-#endif
+#include <univalue.h>
 
 namespace usb_device {
 
@@ -229,7 +223,7 @@ int CLedgerDevice::GetInfo(UniValue &info, std::string &sError)
 int CLedgerDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
-        return errorN(1, sError, __func__, _("Path depth out of range.").c_str());
+        return errorN(1, sError, __func__,"Path depth out of range.");
     }
     size_t lenPath = vPath.size();
     if (0 != Open()) {
@@ -277,7 +271,7 @@ int CLedgerDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, st
 int CLedgerDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
-        return errorN(1, sError, __func__, _("Path depth out of range.").c_str());
+        return errorN(1, sError, __func__,"Path depth out of range.");
     }
     size_t lenPath = vPath.size();
     if (0 != Open()) {
@@ -360,7 +354,7 @@ int CLedgerDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, 
 int CLedgerDevice::SignMessage(const std::vector<uint32_t> &vPath, const std::string &sMessage, std::vector<uint8_t> &vchSig, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
-        return errorN(1, sError, __func__, _("Path depth out of range.").c_str());
+        return errorN(1, sError, __func__, "Path depth out of range.");
     }
     size_t lenPath = vPath.size();
     if (0 != Open()) {
@@ -381,7 +375,7 @@ int CLedgerDevice::SignMessage(const std::vector<uint32_t> &vPath, const std::st
     }
     size_t slen = sMessage.size();
     if (slen > sizeof(in) - apduSize) {
-        return errorN(1, sError, __func__, _("Message too long.").c_str());
+        return errorN(1, sError, __func__, "Message too long.");
     }
 
     in[apduSize++] = slen;
@@ -451,9 +445,9 @@ int CLedgerDevice::SignMessage(const std::vector<uint32_t> &vPath, const std::st
     return 0;
 };
 
-int CLedgerDevice::PrepareTransaction(CMutableTransaction &tx, const CCoinsViewCache &view, const CKeyStore &keystore, int nHashType)
+int CLedgerDevice::PrepareTransaction(CMutableTransaction &tx, const CCoinsViewCache &view, const FillableSigningProvider &keystore, int nHashType)
 {
-    if (!handle) {
+    if (0 != Open()) {
         return errorN(1, sError, __func__, "Device not open.");
     }
     int result, sw;
@@ -482,7 +476,7 @@ int CLedgerDevice::PrepareTransaction(CMutableTransaction &tx, const CCoinsViewC
         const auto &txin = tx.vin[i];
         const Coin &coin = view.AccessCoin(txin.prevout);
         if (coin.IsSpent()) {
-            return errorN(1, sError, __func__, _("Input %d not found or already spent").c_str(), i);
+            return errorN(1, sError, __func__, "Input %d not found or already spent", i);
         }
 
         const CScript &scriptCode = coin.out.scriptPubKey;

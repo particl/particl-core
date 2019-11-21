@@ -18,16 +18,15 @@
 #include <key_io.h>
 #include <validation.h>
 #include <script/script.h>
-#include <timedata.h>
 #include <util/system.h>
-#include <wallet/db.h>
-#include <wallet/wallet.h>
+#include <policy/policy.h>
+#include <wallet/ismine.h>
+
 #include <wallet/hdwallet.h>
 
 #include <univalue.h>
 #include <rpc/server.h>
 #include <rpc/client.h>
-#include <policy/policy.h>
 
 #include <stdint.h>
 #include <string>
@@ -58,6 +57,34 @@ QString TransactionDesc::FormatTxStatus(const interfaces::WalletTx& wtx, const i
     }
 }
 
+// Takes an encoded PaymentRequest as a string and tries to find the Common Name of the X.509 certificate
+// used to sign the PaymentRequest.
+bool GetPaymentRequestMerchant(const std::string& pr, QString& merchant)
+{
+    // Search for the supported pki type strings
+    if (pr.find(std::string({0x12, 0x0b}) + "x509+sha256") != std::string::npos || pr.find(std::string({0x12, 0x09}) + "x509+sha1") != std::string::npos) {
+        // We want the common name of the Subject of the cert. This should be the second occurrence
+        // of the bytes 0x0603550403. The first occurrence of those is the common name of the issuer.
+        // After those bytes will be either 0x13 or 0x0C, then length, then either the ascii or utf8
+        // string with the common name which is the merchant name
+        size_t cn_pos = pr.find({0x06, 0x03, 0x55, 0x04, 0x03});
+        if (cn_pos != std::string::npos) {
+            cn_pos = pr.find({0x06, 0x03, 0x55, 0x04, 0x03}, cn_pos + 5);
+            if (cn_pos != std::string::npos) {
+                cn_pos += 5;
+                if (pr[cn_pos] == 0x13 || pr[cn_pos] == 0x0c) {
+                    cn_pos++; // Consume the type
+                    int str_len = pr[cn_pos];
+                    cn_pos++; // Consume the string length
+                    merchant = QString::fromUtf8(pr.data() + cn_pos, str_len);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wallet, TransactionRecord *rec, int unit)
 {
     int numBlocks;
@@ -81,8 +108,7 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
 
     strHTML += "<b>" + tr("Date") + ":</b> " + (nTime ? GUIUtil::dateTimeStr(nTime) : "") + "<br>";
 
-    if (wtx.is_record)
-    {
+    if (wtx.is_record) {
         strHTML += "<b>" + tr("Transaction ID") + ":</b> " + QString::fromStdString(wtx.irtx->first.ToString()) + "<br>";
 
         JSONRPCRequest request;
@@ -95,17 +121,17 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
         request.params = params;
         UniValue rv = gettransaction(request);
 
-        if (!rv["hex"].isNull())
+        if (!rv["hex"].isNull()) {
             strHTML += "<b>" + tr("Transaction total size") + ":</b> " + QString::number(rv["hex"].get_str().length() / 2) + " bytes<br>";
+        }
 
         strHTML += "<b>" + tr("Confirmations") + ":</b> " + QString::number(rv["confirmations"].get_int()) + "<br>";
 
-        if (!rv["blockhash"].isNull())
-        {
+        if (!rv["blockhash"].isNull()) {
             strHTML += "<b>" + tr("Block hash") + ":</b> " + QString::fromStdString(rv["blockhash"].get_str()) + "<br>";
             strHTML += "<b>" + tr("Block index") + ":</b> " + QString::number(rv["blockindex"].get_int()) + "<br>";
             strHTML += "<b>" + tr("Block time") + ":</b> " + GUIUtil::dateTimeStr(rv["blocktime"].get_int()) + "<br>";
-        };
+        }
 
         strHTML += "<b>Details:</b><br>";
         strHTML += "<p>";
@@ -118,7 +144,7 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
 
         strHTML += "</font></html>";
         return strHTML;
-    };
+    }
 
     //
     // From
@@ -311,32 +337,32 @@ QString TransactionDesc::toHTML(interfaces::Node& node, interfaces::Wallet& wall
     strHTML += "<b>" + tr("Transaction virtual size") + ":</b> " + QString::number(GetVirtualTransactionSize(*wtx.tx)) + " bytes<br>";
     strHTML += "<b>" + tr("Output index") + ":</b> " + QString::number(rec->getOutputIndex()) + "<br>";
 
-    // Message from normal bitcoin:URI (bitcoin:123...?message=example)
-    for (const std::pair<std::string, std::string>& r : orderForm)
-        if (r.first == "Message")
-            strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";
-
     std::string sKey = strprintf("n%d", rec->getOutputIndex());
     mapValue_t::iterator mvi = wtx.value_map.find(sKey);
     if (mvi != wtx.value_map.end())
         strHTML += "<br><b>" + tr("Narration") + ":</b><br>" + GUIUtil::HtmlEscape(mvi->second, true) + "<br>";
 
-#ifdef ENABLE_BIP70
-    //
-    // PaymentRequest info:
-    //
-    for (const std::pair<std::string, std::string>& r : orderForm)
-    {
+    // Message from normal bitcoin:URI (bitcoin:123...?message=example)
+    for (const std::pair<std::string, std::string>& r : orderForm) {
+        if (r.first == "Message")
+            strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";
+
+        //
+        // PaymentRequest info:
+        //
         if (r.first == "PaymentRequest")
         {
-            PaymentRequestPlus req;
-            req.parse(QByteArray::fromRawData(r.second.data(), r.second.size()));
             QString merchant;
-            if (req.getMerchant(PaymentServer::getCertStore(), merchant))
+            if (!GetPaymentRequestMerchant(r.second, merchant)) {
+                merchant.clear();
+            } else {
+                merchant += tr(" (Certificate was not verified)");
+            }
+            if (!merchant.isNull()) {
                 strHTML += "<b>" + tr("Merchant") + ":</b> " + GUIUtil::HtmlEscape(merchant) + "<br>";
+            }
         }
     }
-#endif
 
     if (wtx.is_coinbase)
     {

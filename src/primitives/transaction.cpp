@@ -9,6 +9,70 @@
 #include <tinyformat.h>
 #include <util/strencodings.h>
 
+bool ExtractCoinStakeInt64(const std::vector<uint8_t> &vData, DataOutputTypes get_type, CAmount &out)
+{
+    if (vData.size() < 5) { // First 4 bytes will be height
+        return false;
+    }
+    uint64_t nv;
+    size_t nb;
+    size_t ofs = 4;
+    while (ofs < vData.size()) {
+        uint8_t current_type = vData[ofs];
+        if (current_type == DO_VOTE || current_type == DO_SMSG_DIFFICULTY) {
+            ofs += 5;
+        } else
+        if (current_type == DO_DEV_FUND_CFWD || current_type == DO_SMSG_FEE) {
+            ofs++;
+            if  (0 != GetVarInt(vData, ofs, nv, nb)) {
+                return false;
+            }
+            if (get_type == current_type) {
+                out = nv;
+                return true;
+            }
+            ofs += nb;
+        } else {
+            break; // Unknown identifier byte
+        }
+    }
+    return false;
+}
+
+bool ExtractCoinStakeUint32(const std::vector<uint8_t> &vData, DataOutputTypes get_type, uint32_t &out)
+{
+    if (vData.size() < 5) { // First 4 bytes will be height
+        return false;
+    }
+    uint64_t nv;
+    size_t nb;
+    size_t ofs = 4;
+    while (ofs < vData.size()) {
+        uint8_t current_type = vData[ofs];
+        if (current_type == DO_VOTE || current_type == DO_SMSG_DIFFICULTY) {
+            if (vData.size() < ofs+5) {
+                return false;
+            }
+            if (get_type == current_type) {
+                memcpy(&out, &vData[ofs + 1], 4);
+                return true;
+            }
+            ofs += 5;
+        } else
+        if (current_type == DO_DEV_FUND_CFWD || current_type == DO_SMSG_FEE) {
+            ofs++;
+            if  (0 != GetVarInt(vData, ofs, nv, nb)) {
+                return false;
+            }
+            ofs += nb;
+        } else {
+            break; // Unknown identifier byte
+        }
+    }
+    return false;
+}
+
+
 std::string COutPoint::ToString() const
 {
     return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
@@ -91,8 +155,8 @@ std::string CTxOutBase::ToString() const
             }
         case OUTPUT_DATA:
             {
-            CTxOutData *dout = (CTxOutData*)this;
-            return strprintf("CTxOutData(data=%s)", HexStr(dout->vData).substr(0, 30));
+            CTxOutData *data_output = (CTxOutData*)this;
+            return strprintf("CTxOutData(data=%s)", HexStr(data_output->vData).substr(0, 30));
             }
         case OUTPUT_CT:
             {
@@ -185,20 +249,22 @@ CAmount CTransaction::GetValueOut() const
     CAmount nValueOut = 0;
     for (const auto& tx_out : vout) {
         nValueOut += tx_out.nValue;
-        if (!MoneyRange(tx_out.nValue) || !MoneyRange(nValueOut))
+        if (!MoneyRange(tx_out.nValue) || !MoneyRange(nValueOut)) {
             throw std::runtime_error(std::string(__func__) + ": value out of range");
+        }
     }
 
-    for (auto &txout : vpout)
-    {
-        if (!txout->IsStandardOutput())
+    for (auto &txout : vpout) {
+        if (!txout->IsStandardOutput()) {
             continue;
+        }
 
         CAmount nValue = txout->GetValue();
         nValueOut += txout->GetValue();
-        if (!MoneyRange(nValue) || !MoneyRange(nValueOut))
+        if (!MoneyRange(nValue) || !MoneyRange(nValueOut)) {
             throw std::runtime_error(std::string(__func__) + ": value out of range");
-    };
+        }
+    }
 
     return nValueOut;
 }
@@ -208,29 +274,49 @@ CAmount CTransaction::GetPlainValueOut(size_t &nStandard, size_t &nCT, size_t &n
     // accumulators not cleared here intentionally
     CAmount nValueOut = 0;
 
-    for (const auto &txout : vpout)
-    {
-        if (txout->IsType(OUTPUT_CT))
-        {
+    for (const auto &txout : vpout) {
+        if (txout->IsType(OUTPUT_CT)) {
             nCT++;
         } else
-        if (txout->IsType(OUTPUT_RINGCT))
-        {
+        if (txout->IsType(OUTPUT_RINGCT)) {
             nRingCT++;
-        };
+        }
 
-        if (!txout->IsStandardOutput())
+        if (!txout->IsStandardOutput()) {
             continue;
+        }
 
         nStandard++;
         CAmount nValue = txout->GetValue();
         nValueOut += nValue;
-        if (!MoneyRange(nValue) || !MoneyRange(nValueOut))
+        if (!MoneyRange(nValue) || !MoneyRange(nValueOut)) {
             throw std::runtime_error(std::string(__func__) + ": value out of range");
-    };
+        }
+    }
 
     return nValueOut;
-};
+}
+
+CAmount CTransaction::GetTotalSMSGFees() const
+{
+    CAmount smsg_fees = 0;
+    for (const auto &v : vpout) {
+        if (!v->IsType(OUTPUT_DATA)) {
+            continue;
+        }
+        CTxOutData *txd = (CTxOutData*) v.get();
+        if (txd->vData.size() < 25 || txd->vData[0] != DO_FUND_MSG) {
+            continue;
+        }
+        size_t n = (txd->vData.size()-1) / 24;
+        for (size_t k = 0; k < n; ++k) {
+            uint32_t nAmount;
+            memcpy(&nAmount, &txd->vData[1+k*24+20], 4);
+            smsg_fees += nAmount;
+        }
+    }
+    return smsg_fees;
+}
 
 unsigned int CTransaction::GetTotalSize() const
 {

@@ -17,15 +17,17 @@ extern CCriticalSection cs_main;
 static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
 /** Default number of orphan+recently-replaced txn to keep around for block reconstruction */
 static const unsigned int DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN = 100;
-/** Default for BIP61 (sending reject messages) */
-static constexpr bool DEFAULT_ENABLE_BIP61{false};
+static const bool DEFAULT_PEERBLOOMFILTERS = false;
 
 class PeerLogicValidation final : public CValidationInterface, public NetEventsInterface {
 private:
     CConnman* const connman;
+    BanMan* const m_banman;
+
+    bool CheckIfBanned(CNode* pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 public:
-    explicit PeerLogicValidation(CConnman* connman, CScheduler &scheduler, bool enable_bip61);
+    PeerLogicValidation(CConnman* connman, BanMan* banman, CScheduler& scheduler);
 
     /**
      * Overridden from CValidationInterface.
@@ -38,7 +40,7 @@ public:
     /**
      * Overridden from CValidationInterface.
      */
-    void BlockChecked(const CBlock& block, const CValidationState& state) override;
+    void BlockChecked(const CBlock& block, const BlockValidationState& state) override;
     /**
      * Overridden from CValidationInterface.
      */
@@ -72,9 +74,6 @@ public:
 
 private:
     int64_t m_stale_tip_check_time; //!< Next time to check for stale tip
-
-    /** Enable BIP61 (sending reject messages) */
-    const bool m_enable_bip61;
 };
 
 struct CNodeStateStats {
@@ -86,13 +85,20 @@ struct CNodeStateStats {
     int nLooseHeadersCount = 0;
 };
 
-bool IncomingBlockChecked(const CBlock &block, CValidationState &state);
-
 /** Get statistics from node state */
 bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats);
 /** Increase a node's misbehavior score. */
 //void Misbehaving(NodeId nodeid, int howmuch, const std::string& message="");
 /** Decrease a node's misbehavior score. */
 void DecMisbehaving(NodeId nodeid, int howmuch) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+NodeId GetBlockSource(uint256 hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+void IncPersistentMisbehaviour(NodeId node_id, int howmuch) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+int GetNumDOSStates() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+void ClearDOSStates() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+
+/** Relay transaction to every node */
+void RelayTransaction(const uint256&, const CConnman& connman);
 
 #endif // BITCOIN_NET_PROCESSING_H

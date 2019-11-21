@@ -4,7 +4,6 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <rpc/client.h>
-#include <rpc/protocol.h>
 #include <util/system.h>
 
 #include <set>
@@ -29,16 +28,18 @@ static const CRPCConvertParam vRPCConvertParams[] =
 {
     { "setmocktime", 0, "timestamp" },
     { "setmocktime", 1, "is_offset" },
-    { "generate", 0, "nblocks" },
-    { "generate", 1, "maxtries" },
+    { "utxoupdatepsbt", 1, "descriptors" },
     { "generatetoaddress", 0, "nblocks" },
     { "generatetoaddress", 2, "maxtries" },
+    { "generatetodescriptor", 0, "num_blocks" },
+    { "generatetodescriptor", 2, "maxtries" },
     { "getnetworkhashps", 0, "nblocks" },
     { "getnetworkhashps", 1, "height" },
     { "sendtoaddress", 1, "amount" },
     { "sendtoaddress", 4, "subtractfeefromamount" },
     { "sendtoaddress", 6 , "replaceable" },
     { "sendtoaddress", 7 , "conf_target" },
+    { "sendtoaddress", 9, "avoid_reuse" },
     { "settxfee", 0, "amount" },
     { "sethdseed", 0, "newkeypool" },
     { "getreceivedbyaddress", 1, "minconf" },
@@ -51,6 +52,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listreceivedbylabel", 2, "include_watchonly" },
     { "getbalance", 1, "minconf" },
     { "getbalance", 2, "include_watchonly" },
+    { "getbalance", 3, "avoid_reuse" },
     { "getblockhash", 0, "height" },
     { "waitforblockheight", 0, "height" },
     { "waitforblockheight", 1, "timeout" },
@@ -70,6 +72,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendmany", 4, "subtractfeefrom" },
     { "sendmany", 5 , "replaceable" },
     { "sendmany", 6 , "conf_target" },
+    { "deriveaddresses", 1, "range" },
     { "scantxoutset", 1, "scanobjects" },
     { "addmultisigaddress", 0, "nrequired" },
     { "addmultisigaddress", 1, "keys" },
@@ -84,23 +87,25 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listunspent", 3, "include_unsafe" },
     { "listunspent", 4, "query_options" },
     { "getblock", 1, "verbosity" },
+    { "getblock", 2, "coinstakeinfo" },
     { "getblockheader", 1, "verbose" },
     { "getchaintxstats", 0, "nblocks" },
     { "gettransaction", 1, "include_watchonly" },
+    { "gettransaction", 2, "verbose" },
     { "getrawtransaction", 1, "verbose" },
     { "createrawtransaction", 0, "inputs" },
     { "createrawtransaction", 1, "outputs" },
     { "createrawtransaction", 2, "locktime" },
     { "createrawtransaction", 3, "replaceable" },
     { "decoderawtransaction", 1, "iswitness" },
-    { "signrawtransaction", 1, "prevtxs" },
-    { "signrawtransaction", 2, "privkeys" },
     { "signrawtransactionwithkey", 1, "privkeys" },
     { "signrawtransactionwithkey", 2, "prevtxs" },
     { "signrawtransactionwithwallet", 1, "prevtxs" },
     { "sendrawtransaction", 1, "allowhighfees" },
+    { "sendrawtransaction", 1, "maxfeerate" },
     { "testmempoolaccept", 0, "rawtxs" },
     { "testmempoolaccept", 1, "allowhighfees" },
+    { "testmempoolaccept", 1, "maxfeerate" },
     { "testmempoolaccept", 2, "ignorelocks" },
     { "combinerawtransaction", 0, "txs" },
     { "fundrawtransaction", 1, "options" },
@@ -117,6 +122,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "createpsbt", 2, "locktime" },
     { "createpsbt", 3, "replaceable" },
     { "combinepsbt", 0, "txs"},
+    { "joinpsbts", 0, "txs"},
     { "finalizepsbt", 1, "extract"},
     { "converttopsbt", 1, "permitsigdata"},
     { "converttopsbt", 2, "iswitness"},
@@ -147,6 +153,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "setban", 2, "bantime" },
     { "setban", 3, "absolute" },
     { "setnetworkactive", 0, "state" },
+    { "setwalletflag", 1, "value" },
     { "getmempoolancestors", 1, "verbose" },
     { "getmempooldescendants", 1, "verbose" },
     { "getblockhashes", 0 , "high"},
@@ -177,6 +184,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "tallyvotes", 0, "proposal" },
     { "tallyvotes", 1, "height_start" },
     { "tallyvotes", 2, "height_end" },
+
 
     { "sendparttoblind", 1, "amount" },
     { "sendparttoblind", 4, "subtractfeefromamount" },
@@ -214,7 +222,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "buildscript", 0, "json" },
     { "createsignaturewithwallet", 1, "prevtx" },
     { "createsignaturewithkey", 1, "prevtx" },
-
+    { "createsignaturewithwallet", 4, "options" },
+    { "createsignaturewithkey", 4, "options" },
 
 
     { "walletsettings", 1, "json" },
@@ -224,6 +233,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getnewstealthaddress", 3, "bech32" },
     { "getnewstealthaddress", 4, "makeV2" },
     { "importstealthaddress", 5, "bech32" },
+    { "liststealthaddresses", 1, "options" },
 
     { "listunspentanon", 0, "minconf" },
     { "listunspentanon", 1, "maxconf" },
@@ -254,13 +264,21 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "generatematchingblindfactor", 1, "outputs" },
 
 
-
     { "smsgsend", 3, "paid_msg" },
     { "smsgsend", 4, "days_retention" },
     { "smsgsend", 5, "testfee" },
-    { "smsgsend", 6, "fromfile" },
-    { "smsgsend", 7, "decodehex" },
+    { "smsgsend", 6, "options" },
+    { "smsgsend", 7, "coincontrol" },
     { "smsg", 1, "options" },
+    { "smsgimport", 1, "options" },
+    { "smsginbox", 2, "options" },
+    { "smsgoutbox", 2, "options" },
+    { "smsggetfeerate", 0, "height" },
+    { "smsggetdifficulty", 0, "time" },
+    { "smsgscanbuckets", 0, "options" },
+    { "smsgpeers", 0, "index" },
+    { "smsgzmqpush", 0, "options" },
+
 
     { "devicesignrawtransaction", 1, "prevtxs" },
     { "devicesignrawtransaction", 2, "privkeypaths" },
@@ -286,7 +304,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "rescanblockchain", 0, "start_height"},
     { "rescanblockchain", 1, "stop_height"},
     { "createwallet", 1, "disable_private_keys"},
+    { "createwallet", 2, "blank"},
+    { "createwallet", 4, "avoid_reuse"},
     { "getnodeaddresses", 0, "count"},
+    { "stop", 0, "wait" },
 };
 // clang-format on
 

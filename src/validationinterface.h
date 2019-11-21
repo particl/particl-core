@@ -13,14 +13,12 @@
 #include <memory>
 
 extern CCriticalSection cs_main;
+class BlockValidationState;
 class CBlock;
 class CBlockIndex;
 struct CBlockLocator;
-class CBlockIndex;
 class CConnman;
-class CReserveScript;
 class CValidationInterface;
-class CValidationState;
 class uint256;
 class CScheduler;
 class CTxMemPool;
@@ -119,7 +117,7 @@ protected:
      *
      * Called on a background thread.
      */
-    virtual void BlockDisconnected(const std::shared_ptr<const CBlock> &block) {}
+    virtual void BlockDisconnected(const std::shared_ptr<const CBlock> &block, const CBlockIndex* pindex) {}
     /**
      * Notifies listeners of the new active block chain on-disk.
      *
@@ -137,15 +135,13 @@ protected:
      * Called on a background thread.
      */
     virtual void ChainStateFlushed(const CBlockLocator &locator) {}
-    /** Tells listeners to broadcast their data. */
-    virtual void ResendWalletTransactions(int64_t nBestBlockTime, CConnman* connman) {}
     /**
      * Notifies listeners of a block validation result.
-     * If the provided CValidationState IsValid, the provided block
+     * If the provided BlockValidationState IsValid, the provided block
      * is guaranteed to be the current best block at the time the
      * callback was generated (not necessarily now)
      */
-    virtual void BlockChecked(const CBlock&, const CValidationState&) {}
+    virtual void BlockChecked(const CBlock&, const BlockValidationState&) {}
     /**
      * Notifies listeners that a block which builds directly on our current tip
      * has been received and connected to the headers tree, though not validated yet */
@@ -188,10 +184,9 @@ public:
     void UpdatedBlockTip(const CBlockIndex *, const CBlockIndex *, bool fInitialDownload);
     void TransactionAddedToMempool(const CTransactionRef &);
     void BlockConnected(const std::shared_ptr<const CBlock> &, const CBlockIndex *pindex, const std::shared_ptr<const std::vector<CTransactionRef>> &);
-    void BlockDisconnected(const std::shared_ptr<const CBlock> &);
+    void BlockDisconnected(const std::shared_ptr<const CBlock> &, const CBlockIndex* pindex);
     void ChainStateFlushed(const CBlockLocator &);
-    void Broadcast(int64_t nBestBlockTime, CConnman* connman);
-    void BlockChecked(const CBlock&, const CValidationState&);
+    void BlockChecked(const CBlock&, const BlockValidationState&);
     void NewPoWValidBlock(const CBlockIndex *, const std::shared_ptr<const CBlock>&);
 
     void TransactionAddedToWallet(const std::string &sWalletName, const CTransactionRef& tx);

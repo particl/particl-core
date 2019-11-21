@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2018 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
@@ -144,6 +144,13 @@ int SecretToPublicKey(const CKey &secret, ec_point &out)
     return 0;
 };
 
+int SetPublicKey(const CPubKey &pk, ec_point &out)
+{
+    out.resize(EC_COMPRESSED_SIZE);
+    memcpy(&out[0], pk.begin(), EC_COMPRESSED_SIZE);
+    return 0;
+};
+
 int StealthShared(const CKey &secret, const ec_point &pubkey, CKey &sharedSOut)
 {
     if (pubkey.size() != EC_COMPRESSED_SIZE) {
@@ -156,7 +163,7 @@ int StealthShared(const CKey &secret, const ec_point &pubkey, CKey &sharedSOut)
     }
 
     // H(eQ)
-    if (!secp256k1_ecdh(secp256k1_ctx_stealth, sharedSOut.begin_nc(), &Q, secret.begin())) {
+    if (!secp256k1_ecdh(secp256k1_ctx_stealth, sharedSOut.begin_nc(), &Q, secret.begin(), nullptr, nullptr)) {
         return errorN(1, "%s: secp256k1_ctx_stealth failed.", __func__);
     }
 
@@ -208,7 +215,7 @@ int StealthSecret(const CKey &secret, const ec_point &pubkey, const ec_point &pk
     }
 
     // H(eQ)
-    if (!secp256k1_ecdh(secp256k1_ctx_stealth, sharedSOut.begin_nc(), &Q, secret.begin())) {
+    if (!secp256k1_ecdh(secp256k1_ctx_stealth, sharedSOut.begin_nc(), &Q, secret.begin(), nullptr, nullptr)) {
         return errorN(1, "%s: secp256k1_ctx_stealth failed.", __func__);
     }
 
@@ -250,7 +257,7 @@ int StealthSecretSpend(const CKey &scanSecret, const ec_point &ephemPubkey, cons
 
     uint8_t tmp32[32];
     // H(dP)
-    if (!secp256k1_ecdh(secp256k1_ctx_stealth, tmp32, &P, scanSecret.begin())) {
+    if (!secp256k1_ecdh(secp256k1_ctx_stealth, tmp32, &P, scanSecret.begin(), nullptr, nullptr)) {
         return errorN(1, "%s: secp256k1_ctx_stealth failed.", __func__);
     }
 
@@ -427,7 +434,7 @@ int PrepareStealthOutput(const CStealthAddress &sx, const std::string &sNarratio
         return errorN(1, sError, __func__, "Could not generate receiving public key.");
     }
     CPubKey pkEphem = sEphem.GetPubKey();
-    scriptPubKey = GetScriptForDestination(CPubKey(pkSendTo).GetID());
+    scriptPubKey = GetScriptForDestination(PKHash(CPubKey(pkSendTo)));
 
     uint32_t nStealthPrefix;
     if (0 != MakeStealthData(sNarration, sx.prefix, sShared, pkEphem, vData, nStealthPrefix, sError)) {

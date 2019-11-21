@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdlib.h>
 #include <stdexcept>
+#include <algorithm>
 
 #include "univalue.h"
 
@@ -19,6 +20,14 @@ void UniValue::clear()
     val.clear();
     keys.clear();
     values.clear();
+}
+
+void UniValue::reverse()
+{
+    if (typ != VARR) {
+        return;
+    }
+    std::reverse(values.begin(), values.end());
 }
 
 bool UniValue::setNull()

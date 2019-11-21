@@ -1,19 +1,18 @@
 // Copyright (c) 2014 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2018 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef PARTICL_KEY_STEALTH_H
 #define PARTICL_KEY_STEALTH_H
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <string>
 #include <vector>
-#include <inttypes.h>
 
 #include <key.h>
-#include <serialize.h>
-#include <uint256.h>
 #include <key/types.h>
 
 class CScript;
@@ -124,6 +123,7 @@ public:
 };
 
 int SecretToPublicKey(const CKey &secret, ec_point &out);
+int SetPublicKey(const CPubKey &pk, ec_point &out);
 
 int StealthShared(const CKey &secret, const ec_point &pubkey, CKey &sharedSOut);
 int StealthSecret(const CKey &secret, const ec_point &pubkey, const ec_point &pkSpend, CKey &sharedSOut, ec_point &pkOut);

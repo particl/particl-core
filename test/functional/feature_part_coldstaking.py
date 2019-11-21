@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
-from test_framework.address import *
+from decimal import Decimal
+
+from test_framework.test_particl import ParticlTestFramework, connect_nodes_bi
+from test_framework.util import assert_equal
+from test_framework.address import keyhash_to_p2pkh, hex_str_to_bytes
+from test_framework.authproxy import JSONRPCException
 
 
 def keyhash_to_p2pkh_part(b):
@@ -53,7 +56,7 @@ class ColdStakingTest(ParticlTestFramework):
             break
         assert(coldstakingaddr == 'pparszNYZ1cpWxnNiYLgR193XoZMaJBXDkwyeQeQvThTJKjz3sgbR4NjJT3bqAiHBk7Bd5PBRzEqMiHvma9BG6i9qH2iEf4BgYvfr5v3DaXEayNE')
 
-        changeaddress = {'coldstakingaddress':coldstakingaddr}
+        changeaddress = {'coldstakingaddress': coldstakingaddr}
         ro = nodes[0].walletsettings('changeaddress', changeaddress)
         assert(ro['changeaddress']['coldstakingaddress'] == coldstakingaddr)
 
@@ -80,17 +83,18 @@ class ColdStakingTest(ParticlTestFramework):
             break
         assert(externalChain0 == 'pparszMzzW1247AwkKCH1MqneucXJfDoR3M5KoLsJZJpHkcjayf1xUMwPoTcTfUoQ32ahnkHhjvD2vNiHN5dHL6zmx8vR799JxgCw95APdkwuGm1')
 
-        changeaddress = {'coldstakingaddress':externalChain0}
+        changeaddress = {'coldstakingaddress': externalChain0}
         try:
             ro = nodes[0].walletsettings('changeaddress', changeaddress)
             assert(False), 'Added known address as cold-staking-change-address.'
         except JSONRPCException as e:
             assert('is spendable from this wallet' in e.error['message'])
 
-
+        assert_equal(nodes[0].getcoldstakinginfo()['coin_in_coldstakeable_script'], Decimal(0))
         txid1 = nodes[0].sendtoaddress(addr2_1, 100)
-
         tx = nodes[0].getrawtransaction(txid1, True)
+
+        assert_equal(nodes[0].getcoldstakinginfo()['coin_in_coldstakeable_script'], Decimal('9899.999572'))
 
         hashCoinstake = ''
         hashOther = ''
@@ -237,8 +241,8 @@ class ColdStakingTest(ParticlTestFramework):
         assert(ro['num_derives'] == '3')
 
         # Test stake to coldstakingchangeaddress
-        ro = nodes[0].walletsettings('stakelimit', {'height':2})
-        ro = nodes[0].reservebalance(False)
+        nodes[0].walletsettings('stakelimit', {'height':2})
+        nodes[0].reservebalance(False)
 
         assert(self.wait_for_height(nodes[0], 2))
         self.sync_all()
@@ -283,6 +287,10 @@ class ColdStakingTest(ParticlTestFramework):
                 fFound = True
                 assert(e['involvesWatchonly'] == True)
         assert(fFound)
+
+        self.log.info('Test gettxoutsetinfobyscript')
+        ro = nodes[0].gettxoutsetinfobyscript()
+        assert(ro['coldstake_paytopubkeyhash']['num_plain'] > 5)
 
 
 if __name__ == '__main__':

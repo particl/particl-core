@@ -11,91 +11,174 @@
 #include <consensus/consensus.h>
 #include <primitives/transaction.h>
 #include <primitives/block.h>
+#include <consensus/params.h>
 
-/** "reject" message codes */
-static const unsigned char REJECT_MALFORMED = 0x01;
-static const unsigned char REJECT_INVALID = 0x10;
-static const unsigned char REJECT_OBSOLETE = 0x11;
-static const unsigned char REJECT_DUPLICATE = 0x12;
-static const unsigned char REJECT_NONSTANDARD = 0x40;
-// static const unsigned char REJECT_DUST = 0x41; // part of BIP 61
-static const unsigned char REJECT_INSUFFICIENTFEE = 0x42;
-static const unsigned char REJECT_CHECKPOINT = 0x43;
+/** A "reason" why a transaction was invalid, suitable for determining whether the
+  * provider of the transaction should be banned/ignored/disconnected/etc.
+  */
+enum class TxValidationResult {
+    TX_RESULT_UNSET,         //!< initial value. Tx has not yet been rejected
+    TX_CONSENSUS,            //!< invalid by consensus rules
+    /**
+     * Invalid by a change to consensus rules more recent than SegWit.
+     * Currently unused as there are no such consensus rule changes, and any download
+     * sources realistically need to support SegWit in order to provide useful data,
+     * so differentiating between always-invalid and invalid-by-pre-SegWit-soft-fork
+     * is uninteresting.
+     */
+    TX_RECENT_CONSENSUS_CHANGE,
+    TX_NOT_STANDARD,          //!< didn't meet our local policy rules
+    TX_MISSING_INPUTS,        //!< transaction was missing some of its inputs
+    TX_PREMATURE_SPEND,       //!< transaction spends a coinbase too early, or violates locktime/sequence locks
+    /**
+     * Transaction might be missing a witness, have a witness prior to SegWit
+     * activation, or witness may have been malleated (which includes
+     * non-standard witnesses).
+     */
+    TX_WITNESS_MUTATED,
+    /**
+     * Tx already in mempool or conflicts with a tx in the chain
+     * (if it conflicts with another tx in mempool, we use MEMPOOL_POLICY as it failed to reach the RBF threshold)
+     * Currently this is only used if the transaction already exists in the mempool or on chain.
+     */
+    TX_CONFLICT,
+    TX_MEMPOOL_POLICY,        //!< violated mempool's fee/size/descendant/RBF/etc limits
 
-/** Capture information about block/transaction validation */
-class CValidationState {
+    DOS_100,
+    DOS_50,
+    DOS_20,
+    DOS_5,
+    DOS_1,
+};
+
+/** A "reason" why a block was invalid, suitable for determining whether the
+  * provider of the block should be banned/ignored/disconnected/etc.
+  * These are much more granular than the rejection codes, which may be more
+  * useful for some other use-cases.
+  */
+enum class BlockValidationResult {
+    BLOCK_RESULT_UNSET,      //!< initial value. Block has not yet been rejected
+    BLOCK_CONSENSUS,         //!< invalid by consensus rules (excluding any below reasons)
+    /**
+     * Invalid by a change to consensus rules more recent than SegWit.
+     * Currently unused as there are no such consensus rule changes, and any download
+     * sources realistically need to support SegWit in order to provide useful data,
+     * so differentiating between always-invalid and invalid-by-pre-SegWit-soft-fork
+     * is uninteresting.
+     */
+    BLOCK_RECENT_CONSENSUS_CHANGE,
+    BLOCK_CACHED_INVALID,    //!< this block was cached as being invalid and we didn't store the reason why
+    BLOCK_INVALID_HEADER,    //!< invalid proof of work or time too old
+    BLOCK_MUTATED,           //!< the block's data didn't match the data committed to by the PoW
+    BLOCK_MISSING_PREV,      //!< We don't have the previous block the checked one is built on
+    BLOCK_INVALID_PREV,      //!< A block this one builds on is invalid
+    BLOCK_TIME_FUTURE,       //!< block timestamp was > 2 hours in the future (or our clock is bad)
+    BLOCK_CHECKPOINT,        //!< the block failed to meet one of our checkpoints
+
+    DOS_100,
+    DOS_50,
+    DOS_20,
+    DOS_5,
+    DOS_1,
+};
+
+
+/** Base class for capturing information about block/transaction validation. This is subclassed
+ *  by TxValidationState and BlockValidationState for validation information on transactions
+ *  and blocks respectively. */
+class ValidationState {
 private:
     enum mode_state {
         MODE_VALID,   //!< everything ok
         MODE_INVALID, //!< network rule violation (DoS value may be set)
         MODE_ERROR,   //!< run-time error
-    } mode;
-    int nDoS;
-    std::string strRejectReason;
-    unsigned int chRejectCode;
-    bool corruptionPossible;
-    std::string strDebugMessage;
+    } m_mode;
+    std::string m_reject_reason;
+    std::string m_debug_message;
+protected:
+    void Invalid(const std::string &reject_reason="",
+                 const std::string &debug_message="")
+    {
+        m_reject_reason = reject_reason;
+        m_debug_message = debug_message;
+        if (m_mode != MODE_ERROR) m_mode = MODE_INVALID;
+    }
 public:
-    int nodeId;
-    int nFlags;
+    // ValidationState is abstract. Have a pure virtual destructor.
+    virtual ~ValidationState() = 0;
 
-    CValidationState() : mode(MODE_VALID), nDoS(0), chRejectCode(0), corruptionPossible(false) { nodeId = -1; nFlags = 0;}
-    bool DoS(int level, bool ret = false,
-             unsigned int chRejectCodeIn=0, const std::string &strRejectReasonIn="",
-             bool corruptionIn=false,
-             const std::string &strDebugMessageIn="") {
-        chRejectCode = chRejectCodeIn;
-        strRejectReason = strRejectReasonIn;
-        corruptionPossible = corruptionIn;
-        strDebugMessage = strDebugMessageIn;
-        if (mode == MODE_ERROR)
-            return ret;
-        nDoS += level;
-        mode = MODE_INVALID;
-        return ret;
-    }
-
-    bool Invalid(bool ret = false,
-                 unsigned int _chRejectCode=0, const std::string &_strRejectReason="",
-                 const std::string &_strDebugMessage="") {
-        return DoS(0, ret, _chRejectCode, _strRejectReason, false, _strDebugMessage);
-    }
-    bool Error(const std::string& strRejectReasonIn) {
-        if (mode == MODE_VALID)
-            strRejectReason = strRejectReasonIn;
-        mode = MODE_ERROR;
+    ValidationState() : m_mode(MODE_VALID) { nodeId = -1; nFlags = 0; }
+    bool Error(const std::string& reject_reason)
+    {
+        if (m_mode == MODE_VALID)
+            m_reject_reason = reject_reason;
+        m_mode = MODE_ERROR;
         return false;
     }
-    bool IsValid() const {
-        return mode == MODE_VALID;
-    }
-    bool IsInvalid() const {
-        return mode == MODE_INVALID;
-    }
-    bool IsError() const {
-        return mode == MODE_ERROR;
-    }
-    bool IsInvalid(int &nDoSOut) const {
-        if (IsInvalid()) {
-            nDoSOut = nDoS;
-            return true;
-        }
-        return false;
-    }
-    bool CorruptionPossible() const {
-        return corruptionPossible;
-    }
-    void SetCorruptionPossible() {
-        corruptionPossible = true;
-    }
-    unsigned int GetRejectCode() const { return chRejectCode; }
-    std::string GetRejectReason() const { return strRejectReason; }
-    std::string GetDebugMessage() const { return strDebugMessage; }
+    bool IsValid() const { return m_mode == MODE_VALID; }
+    bool IsInvalid() const { return m_mode == MODE_INVALID; }
+    bool IsError() const { return m_mode == MODE_ERROR; }
+    std::string GetRejectReason() const { return m_reject_reason; }
+    std::string GetDebugMessage() const { return m_debug_message; }
 
     bool fEnforceSmsgFees = false; // per block
     bool fBulletproofsActive = false; // per block
+    bool rct_active = false; // per block
     bool fHasAnonOutput = false; // per tx
     bool fHasAnonInput = false; // per tx
+    bool fIncDataOutputs = false; // per block
+    int m_spend_height = 0;
+    bool m_particl_mode = false;
+    bool m_skip_rangeproof = false;
+    const Consensus::Params *m_consensus_params = nullptr;
+
+    void SetStateInfo(int64_t time, int spend_height, const Consensus::Params& consensusParams, bool particl_mode, bool skip_rangeproof)
+    {
+        m_consensus_params = &consensusParams;
+        fEnforceSmsgFees = time >= consensusParams.nPaidSmsgTime;
+        fBulletproofsActive = time >= consensusParams.bulletproof_time;
+        rct_active = time >= consensusParams.rct_time;
+        fIncDataOutputs = time >= consensusParams.extra_dataoutput_time;
+        if (spend_height > -1) {
+            m_spend_height = spend_height; // Pass through connectblock->checkblock
+        }
+        m_particl_mode = particl_mode;
+        m_skip_rangeproof = skip_rangeproof;
+    }
+
+    int nodeId;
+    int nFlags;
+};
+
+inline ValidationState::~ValidationState() {};
+
+class TxValidationState : public ValidationState {
+private:
+    TxValidationResult m_result;
+public:
+    bool Invalid(TxValidationResult result,
+                 const std::string &reject_reason="",
+                 const std::string &debug_message="")
+    {
+        m_result = result;
+        ValidationState::Invalid(reject_reason, debug_message);
+        return false;
+    }
+    TxValidationResult GetResult() const { return m_result; }
+};
+
+class BlockValidationState : public ValidationState {
+private:
+    BlockValidationResult m_result;
+public:
+    bool Invalid(BlockValidationResult result,
+                 const std::string &reject_reason="",
+                 const std::string &debug_message="") {
+        m_result = result;
+        ValidationState::Invalid(reject_reason, debug_message);
+        return false;
+    }
+    BlockValidationResult GetResult() const { return m_result; }
 };
 
 // These implement the weight = (stripped_size * 4) + witness_size formula,

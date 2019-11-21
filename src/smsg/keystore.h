@@ -54,6 +54,7 @@ public:
     bool HaveKey(const CKeyID &idk) const;
     bool EraseKey(const CKeyID &idk);
     bool GetPubKey(const CKeyID &idk, CPubKey &pk);
+    bool GetKey(const CKeyID &idk, CKey &key);
 
     bool Clear();
 };

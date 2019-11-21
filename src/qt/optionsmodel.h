@@ -13,10 +13,6 @@ namespace interfaces {
 class Node;
 }
 
-QT_BEGIN_NAMESPACE
-class QNetworkProxy;
-QT_END_NAMESPACE
-
 extern const char *DEFAULT_GUI_PROXY_HOST;
 static constexpr unsigned short DEFAULT_GUI_PROXY_PORT = 9050;
 
@@ -31,7 +27,7 @@ class OptionsModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    explicit OptionsModel(interfaces::Node& node, QObject *parent = 0, bool resetSettings = false);
+    explicit OptionsModel(interfaces::Node& node, QObject *parent = nullptr, bool resetSettings = false);
 
     enum OptionID {
         StartAtStartup,         // bool
@@ -55,6 +51,7 @@ public:
         DatabaseCache,          // int
         SpendZeroConfChange,    // bool
         ShowIncomingStakeNotifications, // bool
+        ShowZeroValueCoinstakes, // bool
         Listen,                 // bool
         ReserveBalance,         // int
         OptionIDRowCount,
@@ -75,17 +72,20 @@ public:
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
-    bool getProxySettings(QNetworkProxy& proxy) const;
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
 
-    bool getShowIncomingStakeNotifications() { return fShowIncomingStakeNotifications; }
+    /* Explicit setters */
+    void SetPrune(bool prune, bool force = false);
 
     /* Restart flag helper */
     void setRestartRequired(bool fRequired);
     bool isRestartRequired() const;
 
     interfaces::Node& node() const { return m_node; }
+
+    bool getShowIncomingStakeNotifications() { return fShowIncomingStakeNotifications; }
+    bool getShowZeroValueCoinstakes() { return show_zero_value_coinstakes; }
 
 private:
     interfaces::Node& m_node;
@@ -98,6 +98,7 @@ private:
     QString strThirdPartyTxUrls;
     bool fCoinControlFeatures;
     bool fShowIncomingStakeNotifications;
+    bool show_zero_value_coinstakes;
     /* settings that were overridden by command-line */
     QString strOverriddenByCommandLine;
 
@@ -110,6 +111,7 @@ private:
     void checkAndMigrate();
 Q_SIGNALS:
     void displayUnitChanged(int unit);
+    void txnViewOptionsChanged();
     void coinControlFeaturesChanged(bool);
     void hideTrayIconChanged(bool);
     void setReserveBalance(CAmount);

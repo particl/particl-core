@@ -1,7 +1,18 @@
 // Copyright (c) 2014-2015 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+
+#define ENABLE_BIP39_ENGLISH 1
+#define ENABLE_BIP39_FRENCH 1
+#define ENABLE_BIP39_JAPANESE 1
+#define ENABLE_BIP39_SPANISH 1
+#define ENABLE_BIP39_CHINESE_S 1
+#define ENABLE_BIP39_CHINESE_T 1
+#define ENABLE_BIP39_ITALIAN 1
+#define ENABLE_BIP39_KOREAN 1
+#define ENABLE_BIP39_CZECH 1
 
 #include <key/mnemonic.h>
 
@@ -12,14 +23,60 @@
 #include <unilib/uninorms.h>
 #include <unilib/utf8.h>
 
+#ifdef ENABLE_BIP39_ENGLISH
 #include <key/wordlists/english.h>
+#else
+unsigned char *english_txt = nullptr;
+uint32_t english_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_FRENCH
 #include <key/wordlists/french.h>
+#else
+unsigned char *french_txt = nullptr;
+uint32_t french_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_JAPANESE
 #include <key/wordlists/japanese.h>
+#else
+unsigned char *japanese_txt = nullptr;
+uint32_t japanese_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_SPANISH
 #include <key/wordlists/spanish.h>
+#else
+unsigned char *spanish_txt = nullptr;
+uint32_t spanish_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_CHINESE_S
 #include <key/wordlists/chinese_simplified.h>
+#else
+unsigned char *chinese_simplified_txt = nullptr;
+uint32_t chinese_simplified_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_CHINESE_T
 #include <key/wordlists/chinese_traditional.h>
+#else
+unsigned char *chinese_traditional_txt = nullptr;
+uint32_t chinese_traditional_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_ITALIAN
 #include <key/wordlists/italian.h>
+#else
+unsigned char *italian_txt = nullptr;
+uint32_t italian_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_KOREAN
 #include <key/wordlists/korean.h>
+#else
+unsigned char *korean_txt = nullptr;
+uint32_t korean_txt_len = 0;
+#endif
+#ifdef ENABLE_BIP39_CZECH
+#include <key/wordlists/czech.h>
+#else
+unsigned char *czech_txt = nullptr;
+uint32_t czech_txt_len = 0;
+#endif
 
 
 static const unsigned char *mnLanguages[] =
@@ -33,6 +90,7 @@ static const unsigned char *mnLanguages[] =
     chinese_traditional_txt,
     italian_txt,
     korean_txt,
+    czech_txt,
 };
 
 static const uint32_t mnLanguageLens[] =
@@ -46,6 +104,7 @@ static const uint32_t mnLanguageLens[] =
     chinese_traditional_txt_len,
     italian_txt_len,
     korean_txt_len,
+    czech_txt_len,
 };
 
 const char *mnLanguagesDesc[WLL_MAX] =
@@ -59,6 +118,7 @@ const char *mnLanguagesDesc[WLL_MAX] =
     "Chinese Traditional",
     "Italian",
     "Korean",
+    "Czech",
 };
 
 const char *mnLanguagesTag[WLL_MAX] =
@@ -72,10 +132,14 @@ const char *mnLanguagesTag[WLL_MAX] =
     "chinese_t",
     "italian",
     "korean",
+    "czech",
 };
 
 static void NormaliseUnicode(std::string &str)
 {
+    if (str.size() < 1) {
+        return;
+    }
     std::u32string u32;
     ufal::unilib::utf8::decode(str, u32);
     ufal::unilib::uninorms::nfkd(u32);
@@ -155,18 +219,20 @@ int MnemonicDetectLanguage(const std::string &sWordList)
     }
 
     for (int l = 1; l < WLL_MAX; ++l) {
+        char *pwl = (char*) mnLanguages[l];
+        if (!pwl) {
+            continue;
+        }
+        int m = mnLanguageLens[l];
         strcpy(tmp, sWordList.c_str());
 
-        char *pwl = (char*) mnLanguages[l];
-        int m = mnLanguageLens[l];
-
-        // The chinese dialects have many words in common, match full phrase
+        // The Chinese dialects have many words in common, match full phrase
         int maxTries = (l == WLL_CHINESE_S || l == WLL_CHINESE_T) ? 24 : 8;
 
         int nHit = 0;
         int nMiss = 0;
-        char *p;
-        p = strtok(tmp, " ");
+        char *p, *token;
+        p = strtok_r(tmp, " ", &token);
         while (p != nullptr) {
             int ofs;
             if (0 == GetWordOffset(p, pwl, m, ofs)) {
@@ -178,7 +244,7 @@ int MnemonicDetectLanguage(const std::string &sWordList)
             if (!maxTries--) {
                 break;
             }
-            p = strtok(nullptr, " ");
+            p = strtok_r(nullptr, " ", &token);
         }
 
         // Chinese dialects overlap too much to tolerate failures
@@ -201,7 +267,7 @@ int MnemonicEncode(int nLanguage, const std::vector<uint8_t> &vEntropy, std::str
 
     sWordList = "";
 
-    if (nLanguage < 1 || nLanguage >= WLL_MAX) {
+    if (nLanguage < 1 || nLanguage >= WLL_MAX || !mnLanguages[nLanguage]) {
         sError = "Unknown language.";
         return errorN(1, "%s: %s", __func__, sError.c_str());
     }
@@ -295,7 +361,7 @@ int MnemonicDecode(int &nLanguage, const std::string &sWordListIn, std::vector<u
         nLanguage = MnemonicDetectLanguage(sWordList);
     }
 
-    if (nLanguage < 1 || nLanguage >= WLL_MAX) {
+    if (nLanguage < 1 || nLanguage >= WLL_MAX || !mnLanguages[nLanguage]) {
         sError = "Unknown language";
         return errorN(1, "%s: %s", __func__, sError.c_str());
     }
@@ -320,8 +386,8 @@ int MnemonicDecode(int &nLanguage, const std::string &sWordListIn, std::vector<u
 
     std::vector<int> vWordInts;
 
-    char *p;
-    p = strtok(tmp, " ");
+    char *p, *token;
+    p = strtok_r(tmp, " ", &token);
     while (p != nullptr) {
         int ofs;
         if (0 != GetWordOffset(p, pwl, m, ofs)) {
@@ -330,7 +396,7 @@ int MnemonicDecode(int &nLanguage, const std::string &sWordListIn, std::vector<u
         }
 
         vWordInts.push_back(ofs);
-        p = strtok(nullptr, " ");
+        p = strtok_r(nullptr, " ", &token);
     }
 
     if (!fIgnoreChecksum
@@ -511,7 +577,7 @@ int MnemonicAddChecksum(int nLanguageIn, const std::string &sWordListIn, std::st
 
 int MnemonicGetWord(int nLanguage, int nWord, std::string &sWord, std::string &sError)
 {
-    if (nLanguage < 1 || nLanguage >= WLL_MAX) {
+    if (nLanguage < 1 || nLanguage >= WLL_MAX || !mnLanguages[nLanguage]) {
         sError = "Unknown language.";
         return errorN(1, "%s: %s", __func__, sError.c_str());
     }
@@ -529,9 +595,13 @@ int MnemonicGetWord(int nLanguage, int nWord, std::string &sWord, std::string &s
 
 std::string MnemonicGetLanguage(int nLanguage)
 {
-    if (nLanguage < 1 || nLanguage >= WLL_MAX) {
+    if (nLanguage < 1 || nLanguage >= WLL_MAX || !mnLanguages[nLanguage]) {
         return "Unknown";
     }
 
     return mnLanguagesDesc[nLanguage];
 };
+
+bool MnemonicHaveLanguage(int nLanguage){
+    return mnLanguages[nLanguage];
+}

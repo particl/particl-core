@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Particl developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,17 +16,13 @@ static bool IsDigits(const std::string &str)
 
 UniValue anonoutput(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() > 1)
-        throw std::runtime_error(
             RPCHelpMan{"anonoutput",
-                "\nReturns an anon output at index or by publickey hex.\n",
+                "\nReturns an anon output at index or by publickey hex.\n"
+                "If no output is provided returns the last index.\n",
                 {
-                    {"index/hex", RPCArg::Type::STR, false},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"index/hex\"                    (string, required) index or by publickey hex\n"
-            "\nResult:\n"
+                    {"output", RPCArg::Type::STR, /* default */ "", "Output to view, specified by index or hex of publickey."},
+                },
+                RPCResult{
             "{\n"
             "  \"index\" : num,                 (numeric) Position in chain of anon output.\n"
             "  \"publickey\" : \"hex\",           (string)\n"
@@ -34,15 +30,18 @@ UniValue anonoutput(const JSONRPCRequest &request)
             "  \"n\" : num,                     (numeric)\n"
             "  \"blockheight\" : num,           (numeric)\n"
             "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("anonoutput", "\"1\"")
-            + HelpExampleRpc("anonoutput", "\"2\""));
+                },
+                RPCExamples{
+            HelpExampleCli("anonoutput", "\"1\"")
+            + HelpExampleRpc("anonoutput", "\"2\"")
+            },
+        }.Check(request);
 
     UniValue result(UniValue::VOBJ);
 
     if (request.params.size() == 0) {
         LOCK(cs_main);
-        result.pushKV("lastindex", (int)chainActive.Tip()->nAnonOutputs);
+        result.pushKV("lastindex", (int)::ChainActive().Tip()->nAnonOutputs);
         return result;
     }
 
@@ -87,7 +86,7 @@ UniValue anonoutput(const JSONRPCRequest &request)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
-    { "anon",               "anonoutput",             &anonoutput,             {} },
+    { "anon",               "anonoutput",             &anonoutput,             {"output"} },
 };
 
 void RegisterAnonRPCCommands(CRPCTable &tableRPC)

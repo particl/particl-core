@@ -43,31 +43,25 @@ static void Mlsag(benchmark::State& state)
     uint8_t ss[(nInputs+1) * nCols * 33]; // max_rows * max_cols
 
 
-
-
-    for (size_t k = 0; k < nBlinded; ++k)
-    {
+    for (size_t k = 0; k < nBlinded; ++k) {
         vBlindsOut[0].MakeNewKey(true);
         pblinds[nInputs + k] = vBlindsOut[k].begin();
 
         assert(secp256k1_pedersen_commit(secp256k1_ctx_blind, &cm_out[k], pblinds[nInputs + k], nValues[nInputs + k], &secp256k1_generator_const_h, &secp256k1_generator_const_g));
         pcm_out[k] = cm_out[k].data;
-    };
+    }
 
     memset(tmp32, 0, 32); // Use tmp32 for zero
-    for (size_t k = nBlinded; k < nOutputs; ++k)
-    {
+    for (size_t k = nBlinded; k < nOutputs; ++k) {
         // NOTE: fails if value <= 0
         assert(secp256k1_pedersen_commit(secp256k1_ctx_blind, &cm_out[k], tmp32, nValues[nInputs + k], &secp256k1_generator_const_h, &secp256k1_generator_const_g));
         pcm_out[k] = cm_out[k].data;
-    };
+    }
 
 
     for (size_t k = 0; k < nInputs; ++k)
-    for (size_t i = 0; i < nCols; ++i)
-    {
-        if (i == nRealCol)
-        {
+    for (size_t i = 0; i < nCols; ++i) {
+        if (i == nRealCol) {
             vKeys[k].MakeNewKey(true);
             pkeys[k] = vKeys[k].begin();
 
@@ -81,7 +75,7 @@ static void Mlsag(benchmark::State& state)
             assert(secp256k1_pedersen_commit(secp256k1_ctx_blind, &cm_in[i+k*nCols], pblinds[k], nValues[k], &secp256k1_generator_const_h, &secp256k1_generator_const_g));
             pcm_in[i+k*nCols] = cm_in[i+k*nCols].data;
             continue;
-        };
+        }
 
         // Fake input
         CKey key;
@@ -93,7 +87,7 @@ static void Mlsag(benchmark::State& state)
         key.MakeNewKey(true);
         assert(secp256k1_pedersen_commit(secp256k1_ctx_blind, &cm_in[i+k*nCols], key.begin(), v, &secp256k1_generator_const_h, &secp256k1_generator_const_g));
         pcm_in[i+k*nCols] = cm_in[i+k*nCols].data;
-    };
+    }
 
     uint8_t blindSum[32];
     pkeys[nInputs] = blindSum;
@@ -111,12 +105,11 @@ static void Mlsag(benchmark::State& state)
 
 
 
-    while (state.KeepRunning())
-    {
+    while (state.KeepRunning()) {
         assert(0 == secp256k1_verify_mlsag(secp256k1_ctx_blind,
             preimage, nCols, nRows,
             m, ki, pc, ss));
-    };
+    }
 
     ECC_Stop_Blinding();
 }

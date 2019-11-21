@@ -1,12 +1,12 @@
-// Copyright (c) 2012-2018 The Bitcoin Core developers
+// Copyright (c) 2012-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <serialize.h>
 #include <streams.h>
 #include <hash.h>
+#include <test/util/setup_common.h>
 #include <util/strencodings.h>
-#include <test/test_bitcoin.h>
 
 #include <stdint.h>
 
@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(varints)
     }
 
     for (uint64_t i = 0;  i < 100000000000ULL; i += 999999937) {
-        uint64_t j = -1;
+        uint64_t j = std::numeric_limits<uint64_t>::max();
         ss >> VARINT(j);
         BOOST_CHECK_MESSAGE(i == j, "decoded:" << j << " expected:" << i);
     }
@@ -258,6 +258,14 @@ static bool isCanonicalException(const std::ios_base::failure& ex)
     return strcmp(expectedException.what(), ex.what()) == 0;
 }
 
+BOOST_AUTO_TEST_CASE(vector_bool)
+{
+    std::vector<uint8_t> vec1{1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1};
+    std::vector<bool> vec2{1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1};
+
+    BOOST_CHECK(vec1 == std::vector<uint8_t>(vec2.begin(), vec2.end()));
+    BOOST_CHECK(SerializeHash(vec1) == SerializeHash(vec2));
+}
 
 BOOST_AUTO_TEST_CASE(noncanonical)
 {

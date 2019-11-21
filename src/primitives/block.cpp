@@ -7,8 +7,6 @@
 
 #include <hash.h>
 #include <tinyformat.h>
-#include <util/strencodings.h>
-#include <crypto/common.h>
 
 int WITNESS_SCALE_FACTOR = WITNESS_SCALE_FACTOR_PART;
 

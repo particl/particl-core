@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) 2015-2016 The Bitcoin Core developers
+# Copyright (c) 2018-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.z
 """Test the ZMQ API."""
@@ -11,7 +12,6 @@ import base64
 
 from test_framework.test_particl import ParticlTestFramework
 from test_framework.test_framework import SkipTest
-from test_framework.util import bytes_to_hex_str
 
 
 class ZMQTest(ParticlTestFramework):
@@ -78,6 +78,23 @@ class ZMQTest(ParticlTestFramework):
             self.log.debug("Destroying zmq context")
             self.zmqContext.destroy(linger=None)
 
+    def waitForZmqSmsg(self, msgid):
+        for count in range(0, 100):
+            try:
+                msg = self.zmqSubSocket.recv_multipart(self.zmq.NOBLOCK)
+            except self.zmq.ZMQError:
+                time.sleep(0.25)
+                continue
+
+            topic = msg[0].decode('utf-8')
+            if topic == 'smsg':
+                fFound = True
+                zmqhash = msg[1].hex()
+                assert(zmqhash[:4] == '0300')  # version 3.0
+                assert(zmqhash[4:] == msgid)
+                return True
+        return False
+
     def _zmq_test(self):
         nodes = self.nodes
 
@@ -106,7 +123,7 @@ class ZMQTest(ParticlTestFramework):
             msgSequence = struct.unpack('<I', msg[-1])[-1]
             if topic == 'hashtx' and msgSequence == 1:
                 fFound = True
-                zmqhash = bytes_to_hex_str(msg[1])
+                zmqhash = msg[1].hex()
                 assert(zmqhash == txnHash)
             elif topic == 'rawtx' and msgSequence == 1:
                 fFoundRawTx = True
@@ -116,7 +133,7 @@ class ZMQTest(ParticlTestFramework):
                 #CTransaction.deserialize
             elif topic == 'hashwtx' and msgSequence == 0:
                 fFoundWtx = True
-                zmqhash = bytes_to_hex_str(msg[1][0:32])
+                zmqhash = msg[1][0:32].hex()
                 assert(zmqhash == txnHash)
                 walletName = msg[1][32:].decode('utf-8')
                 assert(walletName == 'wallet_test')
@@ -142,7 +159,7 @@ class ZMQTest(ParticlTestFramework):
             msgSequence = struct.unpack('<I', msg[-1])[-1]
             if topic == 'hashblock' and msgSequence == 0:
                 fFound = True
-                blkhash = bytes_to_hex_str(msg[1])
+                blkhash = msg[1].hex()
                 besthash = nodes[1].getbestblockhash()
                 assert(blkhash == besthash)
                 break
@@ -172,27 +189,19 @@ class ZMQTest(ParticlTestFramework):
         self.stakeBlocks(1, nStakeNode=1)
         self.waitForSmsgExchange(1, 1, 0)
 
-        fFound = False
-        for count in range(0, 100):
-            try:
-                msg = self.zmqSubSocket.recv_multipart(self.zmq.NOBLOCK)
-            except self.zmq.ZMQError:
-                time.sleep(0.5)
-                continue
-
-            topic = msg[0].decode('utf-8')
-            if topic == 'smsg':
-                fFound = True
-                zmqhash = bytes_to_hex_str(msg[1])
-                assert(zmqhash[:4] == '0300')  # version 3.0
-                assert(zmqhash[4:] == msgid)
-                break
-        assert(fFound)
+        assert(self.waitForZmqSmsg(msgid))
 
         ro = nodes[0].getnewzmqserverkeypair()
         assert(len(ro['server_secret_key']) == 40)
         assert(len(ro['server_public_key']) == 40)
         assert(len(ro['server_secret_key_b64']) > 40)
+
+        ro = nodes[0].smsgzmqpush()
+        assert(ro['numsent'] == 1)
+        assert(self.waitForZmqSmsg(msgid))
+
+        ro = nodes[0].smsgzmqpush({"timefrom": int(time.time()) + 1})
+        assert(ro['numsent'] == 0)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2018 The Bitcoin Core developers
+// Copyright (c) 2011-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,7 +16,6 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QMap>
-#include <QMenu>
 #include <QPoint>
 #include <QSystemTrayIcon>
 #include <QMessageBox>
@@ -35,6 +34,7 @@ class PlatformStyle;
 class RPCConsole;
 class SendCoinsRecipient;
 class UnitDisplayStatusBarControl;
+class WalletController;
 class WalletFrame;
 class WalletModel;
 class HelpMessageDialog;
@@ -48,6 +48,7 @@ class Node;
 QT_BEGIN_NAMESPACE
 class QAction;
 class QComboBox;
+class QMenu;
 class QProgressBar;
 class QProgressDialog;
 QT_END_NAMESPACE
@@ -68,24 +69,38 @@ class BitcoinGUI : public QMainWindow
 public:
     static const std::string DEFAULT_UIPLATFORM;
 
-    explicit BitcoinGUI(interfaces::Node& node, const PlatformStyle *platformStyle, const NetworkStyle *networkStyle, QWidget *parent = 0);
+    explicit BitcoinGUI(interfaces::Node& node, const PlatformStyle *platformStyle, const NetworkStyle *networkStyle, QWidget *parent = nullptr);
     ~BitcoinGUI();
 
     /** Set the client model.
         The client model represents the part of the core that communicates with the P2P network, and is wallet-agnostic.
     */
     void setClientModel(ClientModel *clientModel);
+#ifdef ENABLE_WALLET
+    void setWalletController(WalletController* wallet_controller);
+#endif
 
 #ifdef ENABLE_WALLET
     /** Set the wallet model.
         The wallet model represents a bitcoin wallet, and offers access to the list of transactions, address book and sending
         functionality.
     */
-    bool addWallet(WalletModel *walletModel);
-    bool removeWallet(WalletModel* walletModel);
+    void addWallet(WalletModel* walletModel);
+    void removeWallet(WalletModel* walletModel);
     void removeAllWallets();
 #endif // ENABLE_WALLET
     bool enableWallet = false;
+
+    /** Get the tray icon status.
+        Some systems have not "system tray" or "notification area" available.
+    */
+    bool hasTrayIcon() const { return trayIcon; }
+
+    /** Disconnect core signals from GUI client */
+    void unsubscribeFromCoreSignals();
+
+    bool test_mode = false;
+    void setTestMode() { test_mode = true; };
 
 protected:
     void changeEvent(QEvent *e);
@@ -97,6 +112,7 @@ protected:
 
 private:
     interfaces::Node& m_node;
+    WalletController* m_wallet_controller{nullptr};
     std::unique_ptr<interfaces::Handler> m_handler_message_box;
     std::unique_ptr<interfaces::Handler> m_handler_question;
     ClientModel* clientModel = nullptr;
@@ -135,6 +151,10 @@ private:
     QAction* openRPCConsoleAction = nullptr;
     QAction* openAction = nullptr;
     QAction* showHelpMessageAction = nullptr;
+    QAction* m_create_wallet_action{nullptr};
+    QAction* m_open_wallet_action{nullptr};
+    QMenu* m_open_wallet_menu{nullptr};
+    QAction* m_close_wallet_action{nullptr};
     QAction* m_wallet_selector_label_action = nullptr;
     QAction* m_wallet_selector_action = nullptr;
     QAction *coldstakingAction = nullptr;
@@ -144,7 +164,7 @@ private:
     QComboBox* m_wallet_selector = nullptr;
 
     QSystemTrayIcon* trayIcon = nullptr;
-    QMenu* trayIconMenu = nullptr;
+    const std::unique_ptr<QMenu> trayIconMenu;
     Notificator* notificator = nullptr;
     RPCConsole* rpcConsole = nullptr;
     HelpMessageDialog* helpMessageDialog = nullptr;
@@ -159,6 +179,7 @@ private:
     int spinnerFrame = 0;
 
     const PlatformStyle *platformStyle;
+    const NetworkStyle* const m_network_style;
 
     /** Create the main UI actions. */
     void createActions();
@@ -167,7 +188,7 @@ private:
     /** Create the toolbars */
     void createToolBars();
     /** Create system tray icon and notification */
-    void createTrayIcon(const NetworkStyle *networkStyle);
+    void createTrayIcon();
     /** Create system tray menu (or setup the dock menu) */
     void createTrayIconMenu();
 
@@ -176,8 +197,6 @@ private:
 
     /** Connect core signals to GUI client */
     void subscribeToCoreSignals();
-    /** Disconnect core signals from GUI client */
-    void unsubscribeFromCoreSignals();
 
     /** Update UI with latest network info from model. */
     void updateNetworkState();
@@ -192,6 +211,8 @@ private:
 Q_SIGNALS:
     /** Signal raised when a URI was entered or dragged to the GUI */
     void receivedURI(const QString &uri);
+    /** Signal raised when RPC console shown */
+    void consoleShown(RPCConsole* console);
 
 public Q_SLOTS:
     /** Set number of connections shown in the UI */
@@ -208,14 +229,14 @@ public Q_SLOTS:
                             @see CClientUIInterface::MessageBoxFlags
        @param[in] ret       pointer to a bool that will be modified to whether Ok was clicked (modal only)
     */
-    void message(const QString &title, const QString &message, unsigned int style, bool *ret = nullptr);
+    void message(const QString& title, QString message, unsigned int style, bool* ret = nullptr);
 
     // Waiting for hardware device
     void waitingForDevice(bool fCompleted);
 
 #ifdef ENABLE_WALLET
-    bool setCurrentWallet(const QString& name);
-    bool setCurrentWalletBySelectorIndex(int index);
+    void setCurrentWallet(WalletModel* wallet_model);
+    void setCurrentWalletBySelectorIndex(int index);
     /** Set the UI status indicators based on the currently selected wallet.
     */
     void updateWalletStatus();
@@ -243,6 +264,7 @@ public Q_SLOTS:
 private:
     /** Set the proxy-enabled icon as shown in the UI. */
     void updateProxyIcon();
+    void updateWindowTitle();
 
 public Q_SLOTS:
 #ifdef ENABLE_WALLET

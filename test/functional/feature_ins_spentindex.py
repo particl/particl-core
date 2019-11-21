@@ -8,7 +8,7 @@
 #
 
 from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
+from test_framework.util import connect_nodes, assert_equal
 
 
 class SpentIndexTest(ParticlTestFramework):
@@ -73,7 +73,7 @@ class SpentIndexTest(ParticlTestFramework):
 
         txsigned = nodes[0].signrawtransactionwithwallet(txfunded['hex'])
 
-        sent_txid = nodes[0].sendrawtransaction(txsigned['hex'], True)
+        sent_txid = nodes[0].sendrawtransaction(txsigned['hex'], 0)
 
 
         self.stakeBlocks(1)

@@ -5,9 +5,7 @@
 #include <zmq/zmqnotificationinterface.h>
 #include <zmq/zmqpublishnotifier.h>
 
-#include <version.h>
 #include <validation.h>
-#include <streams.h>
 #include <util/system.h>
 #include <netbase.h>
 
@@ -34,12 +32,12 @@ void CZMQNotificationInterface::ThreadZAP()
 
     uint8_t buf[10][1024];
     size_t nb[10];
-    while (zapActive)
-    {
-        zmq_pollitem_t poll_items[] = { sock, 0, ZMQ_POLLIN, 0 };
+    while (zapActive) {
+        zmq_pollitem_t poll_items[] = { {sock, 0, ZMQ_POLLIN, 0} };
         int rc = zmq_poll(poll_items, 1, 500);
-        if (!(rc > 0 && poll_items[0].revents & ZMQ_POLLIN))
+        if (!(rc > 0 && poll_items[0].revents & ZMQ_POLLIN)) {
             continue;
+        }
 
         size_t nParts = 0;
         int more;
@@ -51,23 +49,25 @@ void CZMQNotificationInterface::ThreadZAP()
             nParts++;
         } while (more);
 
-        if (nParts < 5) // too few parts to be valid
+        if (nParts < 5) { // Too few parts to be valid
             continue;
+        }
 
-        if (nb[0] != 3 || memcmp(buf[0], "1.0", 3) != 0)
+        if (nb[0] != 3 || memcmp(buf[0], "1.0", 3) != 0) {
             continue;
+        }
 
         std::string address((char*)buf[3], nb[3]);
 
         bool fAccept = true;
-        if (vWhitelistedRange.size() > 0)
-        {
+        if (vWhitelistedRange.size() > 0) {
             CNetAddr addr;
-            if (!LookupHost(address.c_str(), addr, false))
+            if (!LookupHost(address.c_str(), addr, false)) {
                 fAccept = false;
-            else
+            } else {
                 fAccept = IsWhitelistedRange(addr);
-        };
+            }
+        }
 
         LogPrint(BCLog::ZMQ, "zmq: Connection request from %s %s.\n", address, fAccept ? "accepted" : "denied");
 
@@ -77,7 +77,7 @@ void CZMQNotificationInterface::ThreadZAP()
         zmq_send(sock, NULL, 0, ZMQ_SNDMORE);                       // status text
         zmq_send(sock, NULL, 0, ZMQ_SNDMORE);                       // user id
         zmq_send(sock, NULL, 0, 0);                                 // metadata
-    };
+    }
 
     zmq_close(sock);
 }
@@ -292,7 +292,7 @@ void CZMQNotificationInterface::BlockConnected(const std::shared_ptr<const CBloc
     }
 }
 
-void CZMQNotificationInterface::BlockDisconnected(const std::shared_ptr<const CBlock>& pblock)
+void CZMQNotificationInterface::BlockDisconnected(const std::shared_ptr<const CBlock>& pblock, const CBlockIndex* pindexDisconnected)
 {
     for (const CTransactionRef& ptx : pblock->vtx) {
         // Do a normal notify for each transaction removed in block disconnection

@@ -1,10 +1,12 @@
 *.tar.gz
 
 *.exe
+*.pdb
 src/particl
 src/particld
 src/particl-cli
 src/particl-tx
+src/particl-wallet
 src/test/test_particl
 src/test/test_particl_fuzzy
 src/qt/test/test_particl-qt
@@ -34,6 +36,7 @@ libtool
 src/config/bitcoin-config.h
 src/config/bitcoin-config.h.in
 src/config/stamp-h1
+src/obj
 share/setup.nsi
 share/qt/Info.plist
 
@@ -68,10 +71,10 @@ src/qt/particl-qt.includes
 *.pyc
 *.o
 *.o-*
-*.patch
 *.a
 *.pb.cc
 *.pb.h
+*.dat
 
 *.log
 *.trs
@@ -80,6 +83,10 @@ src/qt/particl-qt.includes
 *.json.h
 *.raw.h
 
+# Only ignore unexpected patches
+*.patch
+!depends/patches/**/*.patch
+
 #libtool object files
 *.lo
 *.la
@@ -87,9 +94,13 @@ src/qt/particl-qt.includes
 # Compilation and Qt preprocessor part
 *.qm
 Makefile
+!depends/Makefile
 particl-qt
 Particl-Qt.app
 background.tiff*
+
+# Qt Creator
+Makefile.am.user
 
 # Unit-tests
 Makefile.test
@@ -129,3 +140,9 @@ db4/
 
 .project
 .vscode
+# clang-check
+*.plist
+
+osx_volname
+dist/
+*.background.tiff

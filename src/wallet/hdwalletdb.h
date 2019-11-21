@@ -5,20 +5,22 @@
 #ifndef PARTICL_WALLET_HDWALLETDB_H
 #define PARTICL_WALLET_HDWALLETDB_H
 
-#include <amount.h>
 #include <primitives/transaction.h>
-#include <wallet/wallet.h>
 #include <wallet/walletdb.h>
-#include <key.h>
 #include <key/types.h>
-#include <key/stealth.h>
-#include <key/extkey.h>
 
-#include <list>
-#include <stdint.h>
 #include <string>
-#include <utility>
 #include <vector>
+
+class CAddressBookData;
+class CEKAKeyPack;
+class CEKASCKeyPack;
+class CEKAStealthKeyPack;
+class CExtKeyAccount;
+class CStealthAddress;
+class CStoredExtKey;
+class uint160;
+class uint256;
 
 /*
 prefixes
@@ -124,7 +126,7 @@ public:
         pkEphem = pkEphem_;
         pkScan = pkScan_;
         outpoint = outpoint_;
-    };
+    }
 
     CPubKey   pkEphem;
     CPubKey   pkScan;
@@ -137,7 +139,7 @@ public:
         READWRITE(pkEphem);
         READWRITE(pkScan);
         READWRITE(outpoint);
-    };
+    }
 };
 
 class COwnedAnonOutput
@@ -151,7 +153,7 @@ public:
     {
         outpoint = outpoint_;
         fSpent   = fSpent_;
-    };
+    }
 
     ec_point vchImage;
     int64_t nValue;
@@ -165,7 +167,7 @@ public:
     {
         READWRITE(outpoint);
         READWRITE(fSpent);
-    };
+    }
 };
 
 class CStealthAddressIndexed
@@ -181,7 +183,7 @@ public:
     inline void SerializationOp(Stream &s, Operation ser_action)
     {
         READWRITE(addrRaw);
-    };
+    }
 };
 
 class CVoteToken
@@ -204,7 +206,7 @@ public:
         READWRITE(nStart);
         READWRITE(nEnd);
         READWRITE(nTimeAdded);
-    };
+    }
 };
 
 /** Access to the wallet database */
@@ -218,35 +220,39 @@ public:
     bool InTxn()
     {
         return m_batch.pdb && m_batch.activeTxn;
-    };
+    }
 
     Dbc *GetTxnCursor()
     {
-        if (!m_batch.pdb || !m_batch.activeTxn)
+        if (!m_batch.pdb || !m_batch.activeTxn) {
             return nullptr;
+        }
 
         DbTxn *ptxnid = m_batch.activeTxn; // call TxnBegin first
 
         Dbc *pcursor = nullptr;
         int ret = m_batch.pdb->cursor(ptxnid, &pcursor, 0);
-        if (ret != 0)
+        if (ret != 0) {
             return nullptr;
+        }
         return pcursor;
-    };
+    }
 
     Dbc *GetCursor()
     {
         return m_batch.GetCursor();
-    };
+    }
 
     template< typename T>
     bool Replace(Dbc *pcursor, const T &value)
     {
-        if (!pcursor)
+        if (!pcursor) {
             return false;
+        }
 
-        if (m_batch.fReadOnly)
+        if (m_batch.fReadOnly) {
             assert(!"Replace called on database in read-only mode");
+        }
 
         // Value
         CDataStream ssValue(SER_DISK, CLIENT_VERSION);
@@ -257,8 +263,7 @@ public:
         // Write
         int ret = pcursor->put(nullptr, &datValue, DB_CURRENT);
 
-        if (ret != 0)
-        {
+        if (ret != 0) {
             LogPrintf("CursorPut ret %d - %s\n", ret, DbEnv::strerror(ret));
         }
         // Clear memory in case it was a private key
@@ -270,27 +275,26 @@ public:
     int ReadAtCursor(Dbc *pcursor, CDataStream &ssKey, CDataStream &ssValue, unsigned int fFlags=DB_NEXT)
     {
         // Read at cursor
-        Dbt datKey;
-        if (fFlags == DB_SET || fFlags == DB_SET_RANGE || fFlags == DB_GET_BOTH || fFlags == DB_GET_BOTH_RANGE)
-        {
-            datKey.set_data(&ssKey[0]);
-            datKey.set_size(ssKey.size());
-        };
-
-        Dbt datValue;
-        if (fFlags == DB_GET_BOTH || fFlags == DB_GET_BOTH_RANGE)
-        {
-            datValue.set_data(&ssValue[0]);
-            datValue.set_size(ssValue.size());
-        };
-
-        datKey.set_flags(DB_DBT_MALLOC);
-        datValue.set_flags(DB_DBT_MALLOC);
-        int ret = pcursor->get(&datKey, &datValue, fFlags);
-        if (ret != 0)
+        BerkeleyBatch::SafeDbt datKey, datValue;
+        if (fFlags == DB_SET || fFlags == DB_SET_RANGE || fFlags == DB_GET_BOTH || fFlags == DB_GET_BOTH_RANGE) {
+            datKey.set_data(ssKey.data(), ssKey.size());
+        }
+        if (fFlags == DB_GET_BOTH || fFlags == DB_GET_BOTH_RANGE) {
+            datValue.set_data(ssValue.data(), ssValue.size());
+        }
+        int ret = pcursor->get(datKey, datValue, fFlags);
+        if (ret != 0) {
+            if (datKey.get_data() == ssKey.data()) {
+                datKey.set_data(nullptr, 0); // Avoid free in ~SafeDbt
+            }
+            if (datValue.get_data() == ssValue.data()) {
+                datValue.set_data(nullptr, 0); // Avoid free in ~SafeDbt
+            }
             return ret;
-        else if (datKey.get_data() == nullptr || datValue.get_data() == nullptr)
+        } else
+        if (datKey.get_data() == nullptr || datValue.get_data() == nullptr) {
             return 99999;
+        }
 
         // Convert to streams
         ssKey.SetType(SER_DISK);
@@ -300,43 +304,31 @@ public:
         ssValue.SetType(SER_DISK);
         ssValue.clear();
         ssValue.write((char*)datValue.get_data(), datValue.get_size());
-
-        // Clear and free memory
-        memset(datKey.get_data(), 0, datKey.get_size());
-        memset(datValue.get_data(), 0, datValue.get_size());
-        free(datKey.get_data());
-        free(datValue.get_data());
         return 0;
     }
 
     int ReadKeyAtCursor(Dbc *pcursor, CDataStream &ssKey, unsigned int fFlags=DB_NEXT)
     {
         // Read key at cursor
-        Dbt datKey;
-        if (fFlags == DB_SET || fFlags == DB_SET_RANGE)
-        {
-            datKey.set_data(&ssKey[0]);
-            datKey.set_size(ssKey.size());
+        BerkeleyBatch::SafeDbt datKey;
+        if (fFlags == DB_SET || fFlags == DB_SET_RANGE) {
+            datKey.set_data(&ssKey[0], ssKey.size());
         }
-        datKey.set_flags(DB_DBT_MALLOC);
-
         Dbt datValue;
         datValue.set_flags(DB_DBT_PARTIAL); // don't read data, dlen and doff are 0 after memset
 
-        int ret = pcursor->get(&datKey, &datValue, fFlags);
-        if (ret != 0)
+        int ret = pcursor->get(datKey, &datValue, fFlags);
+        if (ret != 0) {
             return ret;
-        if (datKey.get_data() == nullptr)
+        }
+        if (datKey.get_data() == nullptr) {
             return 99999;
+        }
 
         // Convert to streams
         ssKey.SetType(SER_DISK);
         ssKey.clear();
         ssKey.write((char*)datKey.get_data(), datKey.get_size());
-
-        // Clear and free memory
-        memset(datKey.get_data(), 0, datKey.get_size());
-        free(datKey.get_data());
         return 0;
     }
 
@@ -347,7 +339,6 @@ public:
     bool WriteStealthAddress(const CStealthAddress &sxAddr);
     bool ReadStealthAddress(CStealthAddress &sxAddr);
     bool EraseStealthAddress(const CStealthAddress &sxAddr);
-
 
 
     bool ReadNamedExtKeyId(const std::string &name, CKeyID &identifier, uint32_t nFlags=DB_READ_UNCOMMITTED);
@@ -370,6 +361,7 @@ public:
 
     bool ReadFlag(const std::string &name, int32_t &nValue, uint32_t nFlags=DB_READ_UNCOMMITTED);
     bool WriteFlag(const std::string &name, int32_t nValue);
+    bool WriteWalletFlags(const uint64_t flags);
 
 
     bool ReadExtKeyIndex(uint32_t id, CKeyID &identifier, uint32_t nFlags=DB_READ_UNCOMMITTED);
@@ -415,7 +407,5 @@ public:
     bool WriteWalletSetting(const std::string &setting, const std::string &json);
     bool EraseWalletSetting(const std::string &setting);
 };
-
-//void ThreadFlushHDWalletDB();
 
 #endif // PARTICL_WALLET_HDWALLETDB_H

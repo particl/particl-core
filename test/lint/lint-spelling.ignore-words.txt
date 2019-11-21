@@ -1,10 +1,17 @@
-cas
 hights
 mor
 mut
 objext
-unselect
 useable
+wit
+unparseable
+copyable
+cachable
+errorstring
+keyserver
+homogenous
+setban
+hist
 aks
 nd
 uncrypted
@@ -13,5 +20,4 @@ diable
 rade
 tim
 endianess
-instanciated
 te

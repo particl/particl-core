@@ -1,8 +1,9 @@
 // Copyright (c) 2012-2013 The PPCoin developers
 // Copyright (c) 2014 The BlackCoin developers
-// Copyright (c) 2017 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef PARTICL_POS_KERNEL_H
 #define PARTICL_POS_KERNEL_H
 
@@ -22,12 +23,16 @@ bool CheckStakeKernelHash(const CBlockIndex *pindexPrev,
     uint256 &hashProofOfStake, uint256 &targetProofOfStake,
     bool fPrintProofOfStake=false);
 
+/**
+ * Get kernel hash and value for blockindex and coinstake tx
+ */
+bool GetKernelInfo(const CBlockIndex *blockindex, const CTransaction &tx, uint256 &hash, CAmount &value, CScript &script, uint256 &blockhash);
 
 /**
  * Check kernel hash target and coinstake signature
  * Sets hashProofOfStake on success return
  */
-bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, const CTransaction &tx, int64_t nTime, unsigned int nBits, uint256 &hashProofOfStake, uint256 &targetProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+bool CheckProofOfStake(BlockValidationState &state, const CBlockIndex *pindexPrev, const CTransaction &tx, int64_t nTime, unsigned int nBits, uint256 &hashProofOfStake, uint256 &targetProofOfStake) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /**
  * Check whether the coinstake timestamp meets protocol

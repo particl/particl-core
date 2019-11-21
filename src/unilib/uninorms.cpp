@@ -112,7 +112,8 @@ void uninorms::decompose(std::u32string& str, bool kompatibility) {
   // If needed, allocate enough space and perform the decomposition.
   if (any_decomposition) {
     str.resize(str.size() + additional);
-    for (size_t dec = str.size(), old = dec - additional; old--; )
+    //for (size_t dec = str.size(), old = dec - additional; old--; )
+    for (int dec = str.size(), old = (dec-1) - additional; old >= 0; --old)
       if (str[old] >= Hangul::SBase && str[old] < Hangul::SBase + Hangul::SCount) {
         // Hangul decomposition.
         char32_t s_index = str[old] - Hangul::SBase;

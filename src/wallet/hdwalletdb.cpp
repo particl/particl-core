@@ -3,9 +3,19 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <wallet/hdwalletdb.h>
+
+#include <wallet/wallet.h>
 #include <wallet/hdwallet.h>
+#include <key/extkey.h>
+#include <key/stealth.h>
+#include <primitives/transaction.h>
+#include <uint256.h>
 
 #include <serialize.h>
+#include <stdint.h>
+#include <map>
+#include <utility>
+
 
 class PackKey
 {
@@ -131,6 +141,10 @@ bool CHDWalletDB::WriteFlag(const std::string &name, int32_t nValue)
     return WriteIC(std::make_pair(std::string("flag"), name), nValue, true);
 };
 
+bool CHDWalletDB::WriteWalletFlags(const uint64_t flags)
+{
+    return WriteIC(std::string("flags"), flags);
+};
 
 bool CHDWalletDB::ReadExtKeyIndex(uint32_t id, CKeyID &identifier, uint32_t nFlags)
 {

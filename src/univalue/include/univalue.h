@@ -47,9 +47,9 @@ public:
         std::string s(val_);
         setStr(s);
     }
-    ~UniValue() {}
 
     void clear();
+    void reverse();
 
     bool setNull();
     bool setBool(bool val);

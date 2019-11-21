@@ -1,17 +1,19 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2018 The Bitcoin Core developers
+// Copyright (c) 2009-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_MINER_H
 #define BITCOIN_MINER_H
 
+#include <optional.h>
 #include <primitives/block.h>
 #include <txmempool.h>
 #include <validation.h>
 
-#include <stdint.h>
 #include <memory>
+#include <stdint.h>
+
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 
@@ -136,7 +138,6 @@ private:
 
     // Information on the current status of the block
     uint64_t nBlockWeight;
-    uint64_t nBlockSize;
     uint64_t nBlockTx;
     uint64_t nBlockSigOpsCost;
     CAmount nFees;
@@ -158,7 +159,10 @@ public:
     BlockAssembler(const CChainParams& params, const Options& options);
 
     /** Construct a new block template with coinbase to scriptPubKeyIn */
-    std::unique_ptr<CBlockTemplate> CreateNewBlock(const CScript& scriptPubKeyIn, bool fMineWitnessTx=true, bool fTestBlockValidity=true);
+    std::unique_ptr<CBlockTemplate> CreateNewBlock(const CScript& scriptPubKeyIn, bool fTestBlockValidity=true);
+
+    static Optional<int64_t> m_last_block_num_txs;
+    static Optional<int64_t> m_last_block_weight;
 
 private:
     // utility functions

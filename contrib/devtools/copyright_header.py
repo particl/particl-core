@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2018 The Bitcoin Core developers
+# Copyright (c) 2016-2019 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,9 +32,12 @@ EXCLUDE_DIRS = [
     "src/leveldb/",
     "src/secp256k1/",
     "src/univalue/",
+
+    "src/unilib/",
+    "src/lz4/",
 ]
 
-INCLUDE = ['*.h', '*.cpp', '*.cc', '*.c', '*.py']
+INCLUDE = ['*.h', '*.cpp', '*.cc', '*.c', '*.mm', '*.py', '*.sh', '*.bash-completion']
 INCLUDE_COMPILED = re.compile('|'.join([fnmatch.translate(m) for m in INCLUDE]))
 
 def applies_to_file(filename):
@@ -48,15 +51,22 @@ def applies_to_file(filename):
 # obtain list of files in repo according to INCLUDE and EXCLUDE
 ################################################################################
 
-GIT_LS_CMD = 'git ls-files'
+GIT_LS_CMD = 'git ls-files --full-name'.split(' ')
+GIT_TOPLEVEL_CMD = 'git rev-parse --show-toplevel'.split(' ')
 
-def call_git_ls():
-    out = subprocess.check_output(GIT_LS_CMD.split(' '))
+def call_git_ls(base_directory):
+    out = subprocess.check_output([*GIT_LS_CMD, base_directory])
     return [f for f in out.decode("utf-8").split('\n') if f != '']
 
-def get_filenames_to_examine():
-    filenames = call_git_ls()
-    return sorted([filename for filename in filenames if
+def call_git_toplevel():
+    "Returns the absolute path to the project root"
+    return subprocess.check_output(GIT_TOPLEVEL_CMD).strip().decode("utf-8")
+
+def get_filenames_to_examine(base_directory):
+    "Returns an array of absolute paths to any project files in the base_directory that pass the include/exclude filters"
+    root = call_git_toplevel()
+    filenames = call_git_ls(base_directory)
+    return sorted([os.path.join(root, filename) for filename in filenames if
                    applies_to_file(filename)])
 
 ################################################################################
@@ -64,7 +74,7 @@ def get_filenames_to_examine():
 ################################################################################
 
 
-COPYRIGHT_WITH_C = 'Copyright \(c\)'
+COPYRIGHT_WITH_C = r'Copyright \(c\)'
 COPYRIGHT_WITHOUT_C = 'Copyright'
 ANY_COPYRIGHT_STYLE = '(%s|%s)' % (COPYRIGHT_WITH_C, COPYRIGHT_WITHOUT_C)
 
@@ -78,35 +88,26 @@ ANY_COPYRIGHT_STYLE_OR_YEAR_STYLE = ("%s %s" % (ANY_COPYRIGHT_STYLE,
 ANY_COPYRIGHT_COMPILED = re.compile(ANY_COPYRIGHT_STYLE_OR_YEAR_STYLE)
 
 def compile_copyright_regex(copyright_style, year_style, name):
-    return re.compile('%s %s,? %s' % (copyright_style, year_style, name))
+    return re.compile(r'%s %s,? %s( +\*)?\n' % (copyright_style, year_style, name))
 
 EXPECTED_HOLDER_NAMES = [
-    "Satoshi Nakamoto\n",
-    "The Bitcoin Core developers\n",
-    "The Bitcoin Core developers \n",
-    "Bitcoin Core Developers\n",
-    "the Bitcoin Core developers\n",
-    "The Bitcoin developers\n",
-    "The LevelDB Authors\. All rights reserved\.\n",
-    "BitPay Inc\.\n",
-    "BitPay, Inc\.\n",
-    "University of Illinois at Urbana-Champaign\.\n",
-    "MarcoFalke\n",
-    "Pieter Wuille\n",
-    "Pieter Wuille +\*\n",
-    "Pieter Wuille, Gregory Maxwell +\*\n",
-    "Pieter Wuille, Andrew Poelstra +\*\n",
-    "Andrew Poelstra +\*\n",
-    "Wladimir J. van der Laan\n",
-    "Jeff Garzik\n",
-    "Diederik Huys, Pieter Wuille +\*\n",
-    "Thomas Daede, Cory Fields +\*\n",
-    "Jan-Klaas Kollhof\n",
-    "Sam Rushing\n",
-    "ArtForz -- public domain half-a-node\n",
-    "Intel Corporation",
-    "The Zcash developers",
-    "Jeremy Rubin",
+    r"Satoshi Nakamoto",
+    r"The Bitcoin Core developers",
+    r"BitPay Inc\.",
+    r"University of Illinois at Urbana-Champaign\.",
+    r"Pieter Wuille",
+    r"Wladimir J\. van der Laan",
+    r"Jeff Garzik",
+    r"Jan-Klaas Kollhof",
+    r"ArtForz -- public domain half-a-node",
+    r"Intel Corporation ?",
+    r"The Zcash developers",
+    r"Jeremy Rubin",
+
+    r"The PPCoin developers\n",
+    r"The BlackCoin developers\n",
+    r"The ShadowCoin developers\n",
+    r"The Particl Core developers\n",
 ]
 
 DOMINANT_STYLE_COMPILED = {}
@@ -146,7 +147,7 @@ def file_has_without_c_style_copyright_for_holder(contents, holder_name):
 ################################################################################
 
 def read_file(filename):
-    return open(os.path.abspath(filename), 'r', encoding="utf8").read()
+    return open(filename, 'r', encoding="utf8").read()
 
 def gather_file_info(filename):
     info = {}
@@ -260,12 +261,9 @@ def print_report(file_infos, verbose):
     print(SEPARATOR)
 
 def exec_report(base_directory, verbose):
-    original_cwd = os.getcwd()
-    os.chdir(base_directory)
-    filenames = get_filenames_to_examine()
+    filenames = get_filenames_to_examine(base_directory)
     file_infos = [gather_file_info(f) for f in filenames]
     print_report(file_infos, verbose)
-    os.chdir(original_cwd)
 
 ################################################################################
 # report cmd
@@ -325,13 +323,13 @@ def get_most_recent_git_change_year(filename):
 ################################################################################
 
 def read_file_lines(filename):
-    f = open(os.path.abspath(filename), 'r', encoding="utf8")
+    f = open(filename, 'r', encoding="utf8")
     file_lines = f.readlines()
     f.close()
     return file_lines
 
 def write_file_lines(filename, file_lines):
-    f = open(os.path.abspath(filename), 'w', encoding="utf8")
+    f = open(filename, 'w', encoding="utf8")
     f.write(''.join(file_lines))
     f.close()
 
@@ -339,7 +337,7 @@ def write_file_lines(filename, file_lines):
 # update header years execution
 ################################################################################
 
-COPYRIGHT = 'Copyright \(c\)'
+COPYRIGHT = r'Copyright \(c\)'
 YEAR = "20[0-9][0-9]"
 YEAR_RANGE = '(%s)(-%s)?' % (YEAR, YEAR)
 HOLDER = 'The Bitcoin Core developers'
@@ -399,11 +397,8 @@ def update_updatable_copyright(filename):
                               "Copyright updated! -> %s" % last_git_change_year)
 
 def exec_update_header_year(base_directory):
-    original_cwd = os.getcwd()
-    os.chdir(base_directory)
-    for filename in get_filenames_to_examine():
+    for filename in get_filenames_to_examine(base_directory):
         update_updatable_copyright(filename)
-    os.chdir(original_cwd)
 
 ################################################################################
 # update cmd
@@ -491,7 +486,7 @@ def get_git_change_year_range(filename):
 
 def file_already_has_core_copyright(file_lines):
     index, _ = get_updatable_copyright_line(file_lines)
-    return index != None
+    return index is not None
 
 ################################################################################
 # insert header execution

@@ -13,7 +13,6 @@
 #include <streams.h>
 #include <univalue.h>
 #include <util/system.h>
-#include <util/moneystr.h>
 #include <util/strencodings.h>
 #include <insight/spentindex.h>
 #include <blind.h>
@@ -155,7 +154,7 @@ void ScriptToUniv(const CScript& script, UniValue& out, bool include_address)
     out.pushKV("type", GetTxnOutputType(type));
 
     CTxDestination address;
-    if (include_address && ExtractDestination(script, address)) {
+    if (include_address && ExtractDestination(script, address) && type != TX_PUBKEY) {
         out.pushKV("address", EncodeDestination(address));
     }
 }
@@ -171,7 +170,7 @@ void ScriptPubKeyToUniv(const CScript& scriptPubKey,
     if (fIncludeHex)
         out.pushKV("hex", HexStr(scriptPubKey.begin(), scriptPubKey.end()));
 
-    if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired)) {
+    if (!ExtractDestinations(scriptPubKey, type, addresses, nRequired) || type == TX_PUBKEY) {
         out.pushKV("type", GetTxnOutputType(type));
         return;
     }
@@ -202,17 +201,15 @@ void AddRangeproof(const std::vector<uint8_t> &vRangeproof, UniValue &entry)
 {
     entry.pushKV("rangeproof", HexStr(vRangeproof.begin(), vRangeproof.end()));
 
-    if (vRangeproof.size() > 0)
-    {
+    if (vRangeproof.size() > 0) {
         int exponent, mantissa;
         CAmount min_value, max_value;
-        if (0 == GetRangeProofInfo(vRangeproof, exponent, mantissa, min_value, max_value))
-        {
+        if (0 == GetRangeProofInfo(vRangeproof, exponent, mantissa, min_value, max_value)) {
             entry.pushKV("rp_exponent", exponent);
             entry.pushKV("rp_mantissa", mantissa);
             entry.pushKV("rp_min_value", ValueFromAmount(min_value));
             entry.pushKV("rp_max_value", ValueFromAmount(max_value));
-        };
+        }
     };
 }
 
@@ -220,8 +217,7 @@ void OutputToJSON(uint256 &txid, int i,
     const CTxOutBase *baseOut, UniValue &entry)
 {
     bool fCanSpend = false;
-    switch (baseOut->GetType())
-    {
+    switch (baseOut->GetType()) {
         case OUTPUT_STANDARD:
             {
             fCanSpend = true;
@@ -240,10 +236,19 @@ void OutputToJSON(uint256 &txid, int i,
             entry.pushKV("type", "data");
             entry.pushKV("data_hex", HexStr(s->vData.begin(), s->vData.end()));
             CAmount nValue;
-            if (s->GetCTFee(nValue))
+            if (s->GetCTFee(nValue)) {
                 entry.pushKV("ct_fee", ValueFromAmount(nValue));
-            if (s->GetDevFundCfwd(nValue))
+            }
+            if (s->GetDevFundCfwd(nValue)) {
                 entry.pushKV("dev_fund_cfwd", ValueFromAmount(nValue));
+            }
+            if (s->GetSmsgFeeRate(nValue)) {
+                entry.pushKV("smsgfeerate", ValueFromAmount(nValue));
+            }
+            uint32_t difficulty;
+            if (s->GetSmsgDifficulty(difficulty)) {
+                entry.pushKV("smsgdifficulty", strprintf("%08x", difficulty));
+            }
             }
             break;
         case OUTPUT_CT:
@@ -274,20 +279,18 @@ void OutputToJSON(uint256 &txid, int i,
         default:
             entry.pushKV("type", "unknown");
             break;
-    };
+    }
 
-    if (fCanSpend)
-    {
+    if (fCanSpend) {
         // Add spent information if spentindex is enabled
         CSpentIndexValue spentInfo;
         CSpentIndexKey spentKey(txid, i);
-        if (pCoreWriteGetSpentIndex && pCoreWriteGetSpentIndex(spentKey, spentInfo))
-        {
+        if (pCoreWriteGetSpentIndex && pCoreWriteGetSpentIndex(spentKey, spentInfo)) {
             entry.pushKV("spentTxId", spentInfo.txid.GetHex());
             entry.pushKV("spentIndex", (int)spentInfo.inputIndex);
             entry.pushKV("spentHeight", spentInfo.blockHeight);
-        };
-    };
+        }
+    }
 };
 
 void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry, bool include_hex, int serialize_flags)
@@ -305,31 +308,29 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, UniValue& entry,
     for (unsigned int i = 0; i < tx.vin.size(); i++) {
         const CTxIn& txin = tx.vin[i];
         UniValue in(UniValue::VOBJ);
-        if (tx.IsCoinBase())
+        if (tx.IsCoinBase()) {
             in.pushKV("coinbase", HexStr(txin.scriptSig.begin(), txin.scriptSig.end()));
-          {
-            if (txin.IsAnonInput())
-            {
-                in.pushKV("type", "anon");
-                uint32_t nSigInputs, nSigRingSize;
-                txin.GetAnonInfo(nSigInputs, nSigRingSize);
-                in.pushKV("num_inputs", (int)nSigInputs);
-                in.pushKV("ring_size", (int)nSigRingSize);
-            } else{
+        }
+        if (txin.IsAnonInput()) {
+            in.pushKV("type", "anon");
+            uint32_t nSigInputs, nSigRingSize;
+            txin.GetAnonInfo(nSigInputs, nSigRingSize);
+            in.pushKV("num_inputs", (int)nSigInputs);
+            in.pushKV("ring_size", (int)nSigRingSize);
+        } else {
             in.pushKV("txid", txin.prevout.hash.GetHex());
             in.pushKV("vout", (int64_t)txin.prevout.n);
             UniValue o(UniValue::VOBJ);
             o.pushKV("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.pushKV("hex", HexStr(txin.scriptSig.begin(), txin.scriptSig.end()));
             in.pushKV("scriptSig", o);
+        }
+        if (!tx.vin[i].scriptWitness.IsNull()) {
+            UniValue txinwitness(UniValue::VARR);
+            for (const auto& item : tx.vin[i].scriptWitness.stack) {
+                txinwitness.push_back(HexStr(item.begin(), item.end()));
             }
-            if (!tx.vin[i].scriptWitness.IsNull()) {
-                UniValue txinwitness(UniValue::VARR);
-                for (const auto& item : tx.vin[i].scriptWitness.stack) {
-                    txinwitness.push_back(HexStr(item.begin(), item.end()));
-                }
-                in.pushKV("txinwitness", txinwitness);
-            }
+            in.pushKV("txinwitness", txinwitness);
         }
         in.pushKV("sequence", (int64_t)txin.nSequence);
         vin.push_back(in);

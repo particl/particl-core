@@ -1,32 +1,32 @@
-// Copyright (c) 2018 The Particl Core developers
+// Copyright (c) 2018-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <usbdevice/usbdevice.h>
-#include <usbdevice/debugdevice.h>
 #include <rpc/server.h>
 #include <rpc/util.h>
+#include <rpc/rawtransaction_util.h>
 #include <util/strencodings.h>
 #include <key_io.h>
 #include <key/extkey.h>
 #include <chainparams.h>
-
-#include <univalue.h>
-
-#ifdef ENABLE_WALLET
-#include <wallet/hdwallet.h>
-#include <wallet/rpchdwallet.h>
-#include <wallet/rpcwallet.h>
-#endif
 #include <validation.h>
 #include <core_io.h>
 #include <primitives/transaction.h>
-#include <keystore.h>
 #include <policy/policy.h>
 #include <script/script.h>
 #include <script/script_error.h>
 #include <script/sign.h>
+#include <script/signingprovider.h>
 #include <script/standard.h>
+#include <txmempool.h>
+
+#ifdef ENABLE_WALLET
+#include <wallet/hdwallet.h>
+#include <wallet/rpcwallet.h>
+#endif
+
+#include <univalue.h>
 
 #include <memory>
 
@@ -40,7 +40,7 @@ static std::vector<uint32_t> GetPath(std::vector<uint32_t> &vPath, const UniValu
     if (path.isNum()) {
         sPath = strprintf("%d", path.get_int());
     } else {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, _("Unknown \"path\" type."));
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown \"path\" type.");
     }
 
     if (defaultpath.isNull()) {
@@ -54,7 +54,7 @@ static std::vector<uint32_t> GetPath(std::vector<uint32_t> &vPath, const UniValu
             sPath = defaultpath.get_str() + "/" + sPath;
         }
     } else {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, _("Unknown \"defaultpath\" type."));
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown \"defaultpath\" type.");
     }
 
     int rv;
@@ -77,21 +77,18 @@ static usb_device::CUSBDevice *SelectDevice(std::vector<std::unique_ptr<usb_devi
 
 static UniValue deviceloadmnemonic(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() > 2)
-        throw std::runtime_error(
             RPCHelpMan{"deviceloadmnemonic",
                 "\nStart mnemonic loader.\n",
                 {
-                    {"wordcount", RPCArg::Type::NUM, true},
-                    {"pinprotection", RPCArg::Type::BOOL, true},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"wordcount\"              (int, optional) Word count of mnemonic (default=12).\n"
-            "2. \"pinprotection\"          (bool, optional) Make the new account the default account for the wallet (default=false).\n"
-            "\nExamples\n"
-            + HelpExampleCli("deviceloadmnemonic", "")
-            + HelpExampleRpc("deviceloadmnemonic", ""));
+                    {"wordcount", RPCArg::Type::NUM, /* default */ "12", "Word count of mnemonic."},
+                    {"pinprotection", RPCArg::Type::BOOL, /* default */ "false", "Make the new account the default account for the wallet."},
+                },
+                RPCResults{},
+                RPCExamples{
+            HelpExampleCli("deviceloadmnemonic", "")
+            + HelpExampleRpc("deviceloadmnemonic", "")
+                },
+            }.Check(request);
 
     std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
     usb_device::CUSBDevice *pDevice = SelectDevice(vDevices);
@@ -100,7 +97,7 @@ static UniValue deviceloadmnemonic(const JSONRPCRequest &request)
     if (request.params.size() > 0) {
         std::string s = request.params[0].get_str();
         if (s.length() && !ParseUInt32(s, &wordcount)) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, _("wordcount invalid number."));
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "wordcount invalid number.");
         }
     }
 
@@ -124,17 +121,16 @@ static UniValue deviceloadmnemonic(const JSONRPCRequest &request)
 
 static UniValue devicebackup(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() > 0)
-        throw std::runtime_error(
             RPCHelpMan{"devicebackup",
                 "\nStart device backup mnemonic generator.\n",
                 {
-                }}
-                .ToString() +
-            "\nExamples\n"
-            + HelpExampleCli("devicebackup", "")
-            + HelpExampleRpc("devicebackup", ""));
-
+                },
+                RPCResults{},
+                RPCExamples{
+            HelpExampleCli("devicebackup", "")
+            + HelpExampleRpc("devicebackup", "")
+                },
+            }.Check(request);
 
     std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
     usb_device::CUSBDevice *pDevice = SelectDevice(vDevices);
@@ -152,23 +148,23 @@ static UniValue devicebackup(const JSONRPCRequest &request)
 
 static UniValue listdevices(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() > 0)
-        throw std::runtime_error(
             RPCHelpMan{"listdevices",
                 "\nList connected hardware devices.\n",
                 {
-                }}
-                .ToString() +
-            "\nResult\n"
+                },
+                RPCResult{
             "{\n"
             "  \"vendor\"           (string) USB vendor string.\n"
             "  \"product\"          (string) USB product string.\n"
             "  \"firmwareversion\"  (string) Detected firmware version of device, if possible.\n"
             "}\n"
-            "\nExamples\n"
-            + HelpExampleCli("listdevices", "") +
+                },
+                RPCExamples{
+            HelpExampleCli("listdevices", "") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("listdevices", ""));
+            + HelpExampleRpc("listdevices", "")
+                },
+            }.Check(request);
 
     std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
     ListAllDevices(vDevices);
@@ -200,23 +196,107 @@ static UniValue listdevices(const JSONRPCRequest &request)
     return result;
 };
 
+static UniValue promptunlockdevice(const JSONRPCRequest &request)
+{
+            RPCHelpMan{"promptunlockdevice",
+                "\nPrompt an unlock for the hardware device.\n",
+                {
+                },
+                RPCResult{
+            "{\n"
+            "  \"sent\"           (boolean) whether prompting the unlock was successful.\n"
+            "}\n"
+                },
+                RPCExamples{
+            HelpExampleCli("promptunlockdevice", "") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("promptunlockdevice", "")
+                },
+            }.Check(request);
+
+    std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
+    usb_device::CUSBDevice *pDevice = SelectDevice(vDevices);
+
+    UniValue result(UniValue::VOBJ);
+    std::string sError;
+    if (0 != pDevice->PromptUnlock(sError)) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, sError);
+    }
+
+    result.pushKV("sent", true);
+
+    return result;
+};
+
+static UniValue unlockdevice(const JSONRPCRequest &request)
+{
+            RPCHelpMan{"unlockdevice",
+                "\nList connected hardware devices.\n",
+                {
+                    {"passphrase", RPCArg::Type::STR, /* default */ "", "Passphrase to unlock the device."},
+                    {"pin", RPCArg::Type::NUM, /* default */ "", "PIN to unlock the device."},
+                },
+                RPCResult{
+            "{\n"
+            "  \"unlocked\"           (boolean) will be true when unlocked else error is thrown.\n"
+            "}\n"
+                },
+                RPCExamples{
+            HelpExampleCli("unlockdevice", "\"mysecretpassword\" 1687") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("unlockdevice", "\"mysecretpassword\" 1687")
+                },
+            }.Check(request);
+
+    std::string passphraseword, pin, sError;
+    if (!request.params[0].isNull()) {
+        passphraseword = request.params[0].get_str();
+    }
+    if (!request.params[1].isNull()) {
+        pin = request.params[1].get_str();
+    }
+    if (!pin.length() && !passphraseword.length()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Neither a pin nor a passphraseword was provided.");
+    }
+
+    std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
+    ListAllDevices(vDevices);
+
+    UniValue result(UniValue::VOBJ);
+
+    if (vDevices.size() > 1) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Too many hardware devices connected.");
+    }
+    if (vDevices.size() != 1) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No hardware devices connected.");
+    }
+
+    usb_device::CUSBDevice *device = vDevices[0].get();
+    if (0 != device->Unlock(pin, passphraseword, sError)) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, sError);
+    }
+
+    result.pushKV("unlocked", true);
+
+    return result;
+};
 
 static UniValue getdeviceinfo(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() > 0)
-        throw std::runtime_error(
             RPCHelpMan{"getdeviceinfo",
                 "\nGet information from connected hardware device.\n",
                 {
-                }}
-                .ToString() +
-            "\nResult\n"
+                },
+                RPCResult{
             "{\n"
             "}\n"
-            "\nExamples\n"
-            + HelpExampleCli("getdeviceinfo", "") +
+                },
+                RPCExamples{
+            HelpExampleCli("getdeviceinfo", "") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("getdeviceinfo", ""));
+            + HelpExampleRpc("getdeviceinfo", "")
+                },
+            }.Check(request);
 
     std::vector<std::unique_ptr<usb_device::CUSBDevice> > vDevices;
     usb_device::CUSBDevice *pDevice = SelectDevice(vDevices);
@@ -232,32 +312,29 @@ static UniValue getdeviceinfo(const JSONRPCRequest &request)
 
 static UniValue getdevicepublickey(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() < 1 || request.params.size() > 2)
-        throw std::runtime_error(
             RPCHelpMan{"getdevicepublickey",
                 "\nGet the public key and address at \"path\" from a hardware device.\n",
                 {
-                    {"path", RPCArg::Type::STR, false},
-                    {"accountpath", RPCArg::Type::STR, true},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"path\"              (string, required) The path to derive the key from.\n"
-            "                           The full path is \"accountpath\"/\"path\".\n"
-            "2. \"accountpath\"       (string, optional) Account path, set to empty string to ignore (default=\""+GetDefaultAccountPath()+"\").\n"
-            "\nResult\n"
+                    {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The path to the key to sign with.\n"
+            "                           The full path is \"accountpath\"/\"path\"."},
+                    {"accountpath", RPCArg::Type::STR, /* default */ GetDefaultAccountPath(), "Account path, set to empty string to ignore."},
+                },
+                RPCResult{
             "{\n"
             "  \"publickey\"        (string) The derived public key at \"path\".\n"
             "  \"address\"          (string) The address of \"publickey\".\n"
             "  \"path\"             (string) The full path of \"publickey\".\n"
             "}\n"
-            "\nExamples\n"
+                },
+                RPCExamples{
             "Get the first public key of external chain:\n"
             + HelpExampleCli("getdevicepublickey", "\"0/0\"")
             + "Get the first public key of internal chain of testnet account:\n"
             + HelpExampleCli("getdevicepublickey", "\"1/0\" \"44h/1h/0h\"") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("getdevicepublickey", "\"0/0\""));
+            + HelpExampleRpc("getdevicepublickey", "\"0/0\"")
+                },
+            }.Check(request);
 
     std::vector<uint32_t> vPath;
     GetPath(vPath, request.params[0], request.params[1]);
@@ -278,7 +355,7 @@ static UniValue getdevicepublickey(const JSONRPCRequest &request)
 
     UniValue rv(UniValue::VOBJ);
     rv.pushKV("publickey", HexStr(pk));
-    rv.pushKV("address", CBitcoinAddress(pk.GetID()).ToString());
+    rv.pushKV("address", CBitcoinAddress(PKHash(pk)).ToString());
     rv.pushKV("path", sPath);
 
     return rv;
@@ -286,25 +363,22 @@ static UniValue getdevicepublickey(const JSONRPCRequest &request)
 
 static UniValue getdevicexpub(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() < 1 || request.params.size() > 2)
-        throw std::runtime_error(
             RPCHelpMan{"getdevicexpub",
                 "\nGet the extended public key at \"path\" from a hardware device.\n",
                 {
-                    {"path", RPCArg::Type::STR, false},
-                    {"accountpath", RPCArg::Type::STR, true},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"path\"              (string, required) The path to derive the key from.\n"
-            "                           The full path is \"accountpath\"/\"path\".\n"
-            "2. \"accountpath\"       (string, optional) Account path, set to empty string to ignore (default=\""+GetDefaultAccountPath()+"\").\n"
-            "\nResult\n"
+                    {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The path to the key to sign with.\n"
+            "                           The full path is \"accountpath\"/\"path\"."},
+                    {"accountpath", RPCArg::Type::STR, /* default */ GetDefaultAccountPath(), "Account path, set to empty string to ignore."},
+                },
+                RPCResult{
             "\"address\"              (string) The particl extended public key\n"
-            "\nExamples\n"
-            + HelpExampleCli("getdevicexpub", "\"0\"") +
+                },
+                RPCExamples{
+            HelpExampleCli("getdevicexpub", "\"0\"") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("getdevicexpub", "\"0\""));
+            + HelpExampleRpc("getdevicexpub", "\"0\"")
+                },
+            }.Check(request);
 
     std::vector<uint32_t> vPath;
     GetPath(vPath, request.params[0], request.params[1]);
@@ -323,28 +397,24 @@ static UniValue getdevicexpub(const JSONRPCRequest &request)
 
 static UniValue devicesignmessage(const JSONRPCRequest &request)
 {
-    if (request.fHelp || request.params.size() < 2 || request.params.size() > 3)
-        throw std::runtime_error(
             RPCHelpMan{"devicesignmessage",
                 "\nSign a message with the key at \"path\" on a hardware device.\n",
                 {
-                    {"path", RPCArg::Type::STR, false},
-                    {"message", RPCArg::Type::STR, false},
-                    {"accountpath", RPCArg::Type::STR, true},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"path\"            (string, required) The path to the key to sign with.\n"
-            "                           The full path is \"accountpath\"/\"path\".\n"
-            "2. \"message\"         (string, required) The message to create a signature for.\n"
-            "3. \"accountpath\"     (string, optional) Account path, set to empty string to ignore (default=\""+GetDefaultAccountPath()+"\").\n"
-            "\nResult\n"
+                    {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "The path to the key to sign with.\n"
+            "                           The full path is \"accountpath\"/\"path\"."},
+                    {"message", RPCArg::Type::STR, RPCArg::Optional::NO, "The message to sign for."},
+                    {"accountpath", RPCArg::Type::STR, /* default */ GetDefaultAccountPath(), "Account path, set to empty string to ignore."},
+                },
+                RPCResult{
             "\"signature\"          (string) The signature of the message encoded in base 64\n"
-            "\nExamples\n"
+                },
+                RPCExamples{
             "Sign with the first key of external chain:\n"
             + HelpExampleCli("devicesignmessage", "\"0/0\" \"my message\"") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("devicesignmessage", "\"0/0\", \"my message\""));
+            + HelpExampleRpc("devicesignmessage", "\"0/0\", \"my message\"")
+                },
+            }.Check(request);
 
     std::vector<uint32_t> vPath;
     GetPath(vPath, request.params[0], request.params[2]);
@@ -375,8 +445,6 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
     }
     #endif
 
-    if (request.fHelp || request.params.size() < 1 || request.params.size() > 5)
-        throw std::runtime_error(
             RPCHelpMan{"devicesignrawtransaction",
                 "\nSign inputs for raw transaction (serialized, hex-encoded).\n"
                 "The second optional argument (may be null) is an array of previous transaction outputs that\n"
@@ -384,56 +452,35 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
                 "The third optional argument (may be null) is an array of bip44 paths\n"
                 "that, if given, will be the only keys derived to sign the transaction.\n",
                 {
-                    {"hexstring", RPCArg::Type::STR, false},
-                    {"prevtxs", RPCArg::Type::ARR,
+                    {"hexstring", RPCArg::Type::STR, RPCArg::Optional::NO, "The transaction hex string."},
+                    {"prevtxs", RPCArg::Type::ARR, /* default */ "", "A json array of previous dependent transaction outputs",
                         {
-                            {"", RPCArg::Type::OBJ,
+                            {"", RPCArg::Type::OBJ, RPCArg::Optional::NO, "",
                                 {
-                                    {"txid", RPCArg::Type::STR_HEX, false},
-                                    {"vout", RPCArg::Type::NUM, false},
-                                    {"scriptPubKey", RPCArg::Type::STR_HEX, false},
-                                    {"redeemScript", RPCArg::Type::STR_HEX, false},
-                                    {"amount", RPCArg::Type::AMOUNT, false},
+                                    {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
+                                    {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
+                                    {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "script key"},
+                                    {"redeemScript", RPCArg::Type::STR_HEX, /* default */ "", "(required for P2SH or P2WSH)"},
+                                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount spent"},
                                 },
-                                true},
+                            },
                         },
-                        true},
-                    {"paths", RPCArg::Type::ARR,
+                    },
+                    {"paths", RPCArg::Type::ARR, /* default */ "", "A json array of key paths for signing",
                         {
-                            {"path", RPCArg::Type::STR, true},
+                            {"path", RPCArg::Type::STR, RPCArg::Optional::NO, "bip44 path."},
                         },
-                        true},
-                    {"sighashtype", RPCArg::Type::STR, true},
-                    {"accountpath", RPCArg::Type::STR, true},
-                }}
-                .ToString() +
-            "\nArguments:\n"
-            "1. \"hexstring\"     (string, required) The transaction hex string\n"
-            "2. \"prevtxs\"       (string, optional) An json array of previous dependent transaction outputs\n"
-            "     [               (json array of json objects, or 'null' if none provided)\n"
-            "       {\n"
-            "         \"txid\":\"id\",             (string, required) The transaction id\n"
-            "         \"vout\":n,                  (numeric, required) The output number\n"
-            "         \"scriptPubKey\": \"hex\",   (string, required) script key\n"
-            "         \"redeemScript\": \"hex\",   (string, required for P2SH or P2WSH) redeem script\n"
-            "         \"amount\": value            (numeric, required) The amount spent\n"
-            "       }\n"
-            "       ,...\n"
-            "    ]\n"
-            "3. \"paths\"     (string, optional) A json array of key paths for signing\n"
-            "    [                  (json array of strings, or 'null' if none provided)\n"
-            "      \"path\"   (string) bip44 path\n"
-            "      ,...\n"
-            "    ]\n"
-            "4. \"sighashtype\"     (string, optional, default=ALL) The signature hash type. Must be one of\n"
+                    },
+                    {"sighashtype", RPCArg::Type::STR, /* default */ "ALL", "The signature hash type. Must be one of\n"
             "       \"ALL\"\n"
             "       \"NONE\"\n"
             "       \"SINGLE\"\n"
             "       \"ALL|ANYONECANPAY\"\n"
             "       \"NONE|ANYONECANPAY\"\n"
-            "       \"SINGLE|ANYONECANPAY\"\n"
-            "5. \"accountpath\"     (string, optional) Account path, set to empty string to ignore (default=\""+GetDefaultAccountPath()+"\").\n"
-            "\nResult\n"
+            "       \"SINGLE|ANYONECANPAY\""},
+                    {"accountpath", RPCArg::Type::STR, /* default */ GetDefaultAccountPath(), "Account path, set to empty string to ignore."},
+                },
+                RPCResult{
             "{\n"
             "  \"hex\" : \"value\",           (string) The hex-encoded raw transaction with signature(s)\n"
             "  \"complete\" : true|false,   (boolean) If the transaction has a complete set of signatures\n"
@@ -448,10 +495,13 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
             "    ,...\n"
             "  ]\n"
             "}\n"
-            "\nExamples\n"
-            + HelpExampleCli("devicesignrawtransaction", "\"myhex\"") +
+                },
+                RPCExamples{
+            HelpExampleCli("devicesignrawtransaction", "\"myhex\"") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("devicesignrawtransaction", "\"myhex\""));
+            + HelpExampleRpc("devicesignrawtransaction", "\"myhex\"")
+                },
+            }.Check(request);
 
 #ifdef ENABLE_WALLET
     LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
@@ -476,7 +526,7 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
     CCoinsViewCache view(&viewDummy);
     {
         LOCK(mempool.cs);
-        CCoinsViewCache &viewChain = *pcoinsTip;
+        CCoinsViewCache &viewChain = ::ChainstateActive().CoinsTip();
         CCoinsViewMemPool viewMempool(&viewChain, mempool);
         view.SetBackend(viewMempool); // temporarily switch cache backend to db+mempool view
 
@@ -579,9 +629,9 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
     }
 
 #ifdef ENABLE_WALLET
-    const CKeyStore& keystore = ((fGivenKeys || !pwallet) ? (CKeyStore&)tempKeystore : (CKeyStore&)*pwallet);
+    const FillableSigningProvider& keystore = ((fGivenKeys || !pwallet) ? (FillableSigningProvider&)tempKeystore : (const FillableSigningProvider&)*static_cast<const FillableSigningProvider*>(pwallet->GetSigningProvider()));
 #else
-    const CKeyStore& keystore = tempKeystore;
+    const FillableSigningProvider& keystore = tempKeystore;
 #endif
 
     int nHashType = SIGHASH_ALL;
@@ -612,17 +662,18 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
     const CTransaction txConst(mtx);
 
     // Prepare transaction
-    if (0 != pDevice->Open()) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Failed to open dongle."));
+    int prep = pDevice->PrepareTransaction(mtx, view, keystore, nHashType);
+    if (0 != prep) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("PrepareTransaction failed with code %d.", prep));
     }
-    pDevice->PrepareTransaction(mtx, view, keystore, nHashType);
+
     if (!pDevice->sError.empty()) {
         pDevice->Close();
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("error", pDevice->sError);
         vErrors.push_back(entry);
         UniValue result(UniValue::VOBJ);
-        result.pushKV("hex", EncodeHexTx(mtx));
+        result.pushKV("hex", EncodeHexTx(CTransaction(mtx)));
         if (!vErrors.empty()) {
             result.pushKV("errors", vErrors);
         }
@@ -679,7 +730,7 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
     bool fComplete = vErrors.empty();
 
     UniValue result(UniValue::VOBJ);
-    result.pushKV("hex", EncodeHexTx(mtx));
+    result.pushKV("hex", EncodeHexTx(CTransaction(mtx)));
     result.pushKV("complete", fComplete);
     if (!vErrors.empty()) {
         result.pushKV("errors", vErrors);
@@ -696,36 +747,29 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp))
         return NullUniValue;
 
-    if (request.fHelp || request.params.size() > 5)
-        throw std::runtime_error(
             RPCHelpMan{"initaccountfromdevice",
-                "\nInitialise an extended key account from a hardware device.\n",
+                "\nInitialise an extended key account from a hardware device." +
+                HelpRequiringPassphrase(pwallet) + "\n",
                 {
-                    {"label", RPCArg::Type::STR, true},
-                    {"path", RPCArg::Type::STR, true},
-                    {"makedefault", RPCArg::Type::BOOL, true},
-                    {"scan_chain_from", RPCArg::Type::NUM, true},
-                    {"initstealthchain", RPCArg::Type::BOOL, true},
-                }}
-                .ToString() +
-            HelpRequiringPassphrase(pwallet) +
-            "\nArguments:\n"
-            "1. \"label\"             (string, optional) A label for the account.\n"
-            "2. \"path\"              (string, optional) The path to derive the key from (default=\""+GetDefaultAccountPath()+"\").\n"
-            "                           The full path is \"accountpath\"/\"path\".\n"
-            "3. makedefault           (bool, optional) Make the new account the default account for the wallet (default=true).\n"
-            "4. scan_chain_from       (int, optional) Timestamp, scan the chain for incoming txns only on blocks after time, negative number to skip (default=0).\n"
-            "5. initstealthchain      (bool, optional) Prepare the account to generate stealthaddresses (default=true).\n"
-            "                           The hardware device will need to sign a fake transaction to use as the seed for the scan chain.\n"
-            "\nResult\n"
+                    {"label", RPCArg::Type::STR, /* default */ "", "A label for the account."},
+                    {"path", RPCArg::Type::STR, /* default */ "", "The path to derive the key from (default=\""+GetDefaultAccountPath()+"\")."},
+                    {"makedefault", RPCArg::Type::BOOL, /* default */ "true", "Make the new account the default account for the wallet."},
+                    {"scan_chain_from", RPCArg::Type::NUM, /* default */ "0", "Timestamp, scan the chain for incoming txns only on blocks after time, negative number to skip."},
+                    {"initstealthchain", RPCArg::Type::BOOL, /* default */ "true", "Prepare the account to generate stealthaddresses (default=true).\n"
+            "                           The hardware device will need to sign a fake transaction to use as the seed for the scan chain."},
+                },
+                RPCResult{
             "{\n"
             "  \"extkey\"           (string) The derived extended public key at \"path\".\n"
             "  \"path\"             (string) The full path used to derive the account.\n"
             "}\n"
-            "\nExamples\n"
-            + HelpExampleCli("initaccountfromdevice", "\"new_acc\" \"44h/1h/0h\" false") +
+                },
+                RPCExamples{
+            HelpExampleCli("initaccountfromdevice", "\"new_acc\" \"44h/1h/0h\" false") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("initaccountfromdevice", "\"new_acc\""));
+            + HelpExampleRpc("initaccountfromdevice", "\"new_acc\"")
+                },
+            }.Check(request);
 
     RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR, UniValue::VBOOL, UniValue::VNUM}, true);
 
@@ -784,7 +828,7 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
 
         CStoredExtKey *sekAccount = new CStoredExtKey();
         sekAccount->nFlags |= EAF_ACTIVE | EAF_IN_ACCOUNT | EAF_HARDWARE_DEVICE;
-        sekAccount->kp = ekp;
+        sekAccount->kp = CExtKeyPair(ekp);
         sekAccount->SetPath(vPath); // EKVT_PATH
 
         std::vector<uint8_t> vData;
@@ -809,7 +853,7 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
         std::vector<uint32_t> vChainPath;
         vChainPath.push_back(vPath.back()); // make relative to key before account
         CStoredExtKey *sekExternal = new CStoredExtKey();
-        sekExternal->kp = epExternal;
+        sekExternal->kp = CExtKeyPair(epExternal);
         vChainPath.push_back(nExternal);
         sekExternal->SetPath(vChainPath);
         sekExternal->nFlags |= EAF_ACTIVE | EAF_RECEIVE_ON | EAF_IN_ACCOUNT | EAF_HARDWARE_DEVICE;
@@ -818,7 +862,7 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
         sea->nActiveExternal = sea->NumChains();
 
         CStoredExtKey *sekInternal = new CStoredExtKey();
-        sekInternal->kp = epInternal;
+        sekInternal->kp = CExtKeyPair(epInternal);
         vChainPath.pop_back();
         vChainPath.push_back(nInternal);
         sekInternal->SetPath(vChainPath);
@@ -854,7 +898,7 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
             evStealthScan.SetSeed(vchSig.data(), vchSig.size());
 
             CStoredExtKey *sekStealthScan = new CStoredExtKey();
-            sekStealthScan->kp = evStealthScan;
+            sekStealthScan->kp = CExtKeyPair(evStealthScan);
             vSigPath.clear();
             // sekStealthScan isn't on the account chain
             sekStealthScan->nFlags |= EAF_ACTIVE | EAF_IN_ACCOUNT;
@@ -876,7 +920,7 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
             vPath.pop_back();
 
             CStoredExtKey *sekStealthSpend = new CStoredExtKey();
-            sekStealthSpend->kp = epStealthSpend;
+            sekStealthSpend->kp = CExtKeyPair(epStealthSpend);
             vChainPath.pop_back();
             vChainPath.push_back(nStealthSpend);
             sekStealthSpend->SetPath(vChainPath);
@@ -915,17 +959,21 @@ static UniValue initaccountfromdevice(const JSONRPCRequest &request)
                 throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("ExtKeySetDefaultAccount failed, %s.", ExtKeyGetString(rv)));
             }
         }
-
+        if (!pwallet->UnsetWalletFlagRV(&wdb, WALLET_FLAG_BLANK_WALLET)) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "UnsetWalletFlag failed.");
+        }
         if (!wdb.TxnCommit()) {
             pwallet->idDefaultAccount = idOldDefault;
             pwallet->ExtKeyRemoveAccountFromMapsAndFree(sea);
             throw JSONRPCError(RPC_INTERNAL_ERROR, "TxnCommit failed.");
         }
-    } // pwallet->cs_wallet
+    }
 
     if (nScanFrom >= 0) {
         pwallet->RescanFromTime(nScanFrom, reserver, true /* update */);
         pwallet->MarkDirty();
+        auto locked_chain = pwallet->chain().lock();
+        LOCK(pwallet->cs_wallet);
         pwallet->ReacceptWalletTransactions();
     }
 
@@ -951,33 +999,28 @@ static UniValue devicegetnewstealthaddress(const JSONRPCRequest &request)
         return NullUniValue;
     }
 
-    if (request.fHelp || request.params.size() > 4)
-        throw std::runtime_error(
             RPCHelpMan{"devicegetnewstealthaddress",
-                "\nReturns a new Particl stealth address for receiving payments.\n",
+                "\nReturns a new Particl stealth address for receiving payments." +
+                    HelpRequiringPassphrase(pwallet) + "\n",
                 {
-                    {"label", RPCArg::Type::STR, true},
-                    {"num_prefix_bits", RPCArg::Type::NUM, true},
-                    {"prefix_num", RPCArg::Type::NUM, true},
-                    {"bech32", RPCArg::Type::BOOL, true},
-                }}
-                .ToString() +
-            HelpRequiringPassphrase(pwallet) +
-            "\nArguments:\n"
-            "1. \"label\"             (string, optional) If specified the key is added to the address book.\n"
-            "2. num_prefix_bits     (int, optional) If specified and > 0, the stealth address is created with a prefix.\n"
-            "3. prefix_num          (int, optional) If prefix_num is not specified the prefix will be selected deterministically.\n"
+                    {"label", RPCArg::Type::STR, /* default */ "", "If \"label\" is specified the new address will be added to the address book."},
+                    {"num_prefix_bits", RPCArg::Type::NUM, /* default */ "0", "If specified and > 0, the stealth address is created with a prefix."},
+                    {"prefix_num", RPCArg::Type::NUM, /* default */ "", "If prefix_num is not specified the prefix will be selected deterministically.\n"
             "           prefix_num can be specified in base2, 10 or 16, for base 2 prefix_num must begin with 0b, 0x for base16.\n"
             "           A 32bit integer will be created from prefix_num and the least significant num_prefix_bits will become the prefix.\n"
             "           A stealth address created without a prefix will scan all incoming stealth transactions, irrespective of transaction prefixes.\n"
-            "           Stealth addresses with prefixes will scan only incoming stealth transactions with a matching prefix.\n"
-            "4. bech32              (bool, optional) Use Bech32 encoding, default true.\n"
-            "\nResult:\n"
+            "           Stealth addresses with prefixes will scan only incoming stealth transactions with a matching prefix."},
+                    {"bech32", RPCArg::Type::BOOL, /* default */ "true", "Use Bech32 encoding."},
+                },
+                RPCResult{
             "\"address\"              (string) The new particl stealth address\n"
-            "\nExamples:\n"
-            + HelpExampleCli("devicegetnewstealthaddress", "\"lblTestSxAddrPrefix\" 3 \"0b101\"") +
+                },
+                RPCExamples{
+             HelpExampleCli("devicegetnewstealthaddress", "\"lblTestSxAddrPrefix\" 3 \"0b101\"") +
             "\nAs a JSON-RPC call\n"
-            + HelpExampleRpc("devicegetnewstealthaddress", "\"lblTestSxAddrPrefix\", 3, \"0b101\""));
+            + HelpExampleRpc("devicegetnewstealthaddress", "\"lblTestSxAddrPrefix\", 3, \"0b101\"")
+                },
+            }.Check(request);
 
     EnsureWalletIsUnlocked(pwallet);
 
@@ -991,12 +1034,12 @@ static UniValue devicegetnewstealthaddress(const JSONRPCRequest &request)
     if (request.params.size() > 1) {
         std::string s = request.params[1].get_str();
         if (s.length() && !ParseUInt32(s, &num_prefix_bits)) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, _("num_prefix_bits invalid number."));
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "num_prefix_bits invalid number.");
         }
     }
 
     if (num_prefix_bits > 32) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, _("num_prefix_bits must be <= 32."));
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "num_prefix_bits must be <= 32.");
     }
 
     std::string sPrefix_num;
@@ -1117,6 +1160,8 @@ static const CRPCCommand commands[] =
     { "usbdevice",          "deviceloadmnemonic",           &deviceloadmnemonic,        {"wordcount", "pinprotection"} },
     { "usbdevice",          "devicebackup",                 &devicebackup,              {} },
     { "usbdevice",          "listdevices",                  &listdevices,               {} },
+    { "usbdevice",          "promptunlockdevice",           &promptunlockdevice,        {} },
+    { "usbdevice",          "unlockdevice",                 &unlockdevice,              {"passphrase", "pin"} },
     { "usbdevice",          "getdeviceinfo",                &getdeviceinfo,             {} },
     { "usbdevice",          "getdevicepublickey",           &getdevicepublickey,        {"path","accountpath"} },
     { "usbdevice",          "getdevicexpub",                &getdevicexpub,             {"path","accountpath"} },

@@ -109,7 +109,7 @@ while :; do
         fi
         shift
         else
-        echo 'Error: "--os" requires an argument containing an l (for linux), w (for windows), or x (for Mac OSX)\n'
+        printf 'Error: "--os" requires an argument containing an l (for linux), w (for windows), or x (for Mac OSX)\n'
         exit 1
         fi
         ;;
@@ -289,7 +289,7 @@ then
     mkdir -p inputs
     wget -N -P inputs $osslPatchUrl
     wget -N -P inputs $osslTarUrl
-    make -C ../particl-core/depends download SOURCES_PATH=`pwd`/cache/common
+    make -C ../particl-core/depends download SOURCES_PATH=$(pwd)/cache/common
 
     # Linux
     if [[ $linux = true ]]
@@ -382,7 +382,7 @@ then
         echo ""
         echo "Signing ${VERSION} Windows"
         echo ""
-        ./bin/gbuild -i --commit signature=${COMMIT} ../particl-core/contrib/gitian-descriptors/gitian-win-signer.yml
+        ./bin/gbuild --skip-image --upgrade --commit signature=${COMMIT} ../particl-core/contrib/gitian-descriptors/gitian-win-signer.yml
         ./bin/gsign -p $signProg --signer $SIGNER --release ${VERSION}-win-signed --destination ../gitian.sigs/ ../particl-core/contrib/gitian-descriptors/gitian-win-signer.yml
         mv build/out/particl-*win64-setup.exe ../particl-binaries/${VERSION}
         mv build/out/particl-*win32-setup.exe ../particl-binaries/${VERSION}
@@ -393,7 +393,7 @@ then
         echo ""
         echo "Signing ${VERSION} Mac OSX"
         echo ""
-        ./bin/gbuild -i --commit signature=${COMMIT} ../particl-core/contrib/gitian-descriptors/gitian-osx-signer.yml
+        ./bin/gbuild --skip-image --upgrade --commit signature=${COMMIT} ../particl-core/contrib/gitian-descriptors/gitian-osx-signer.yml
         ./bin/gsign -p $signProg --signer $SIGNER --release ${VERSION}-osx-signed --destination ../gitian.sigs/ ../particl-core/contrib/gitian-descriptors/gitian-osx-signer.yml
         mv build/out/particl-osx-signed.dmg ../particl-binaries/${VERSION}/particl-${VERSION}-osx.dmg
     fi

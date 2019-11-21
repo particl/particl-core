@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2017 The Bitcoin Core developers
+// Copyright (c) 2017-2018 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,10 +9,10 @@
 #include <script/interpreter.h>
 #include <consensus/validation.h>
 #include <validation.h>
+#include <consensus/params.h>
 #include <chainparams.h>
 
 #include <blind.h>
-#include <anon.h>
 #include <timedata.h>
 #include <util/system.h>
 
@@ -24,11 +24,7 @@
 
 
 #include <policy/policy.h>
-#include <smsg/smessage.h>
 
-
-extern bool fBusyImporting;
-extern bool fSkipRangeproof;
 
 bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime)
 {
@@ -189,252 +185,25 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
     return nSigOps;
 }
 
-bool CheckValue(CValidationState &state, CAmount nValue, CAmount &nValueOut)
-{
-    if (nValue < 0)
-        return state.DoS(100, false, REJECT_INVALID, "bad-txns-vout-negative");
-    if (nValue > MAX_MONEY)
-        return state.DoS(100, false, REJECT_INVALID, "bad-txns-vout-toolarge");
-    nValueOut += nValue;
-
-    return true;
-}
-
-bool CheckStandardOutput(CValidationState &state, const Consensus::Params& consensusParams, const CTxOutStandard *p, CAmount &nValueOut)
-{
-    if (!CheckValue(state, p->nValue, nValueOut)) {
-        return false;
-    }
-
-    if (HasIsCoinstakeOp(p->scriptPubKey)) {
-        if (GetAdjustedTime() < consensusParams.OpIsCoinstakeTime) {
-            return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-opiscoinstake");
-        }
-        if (!consensusParams.fAllowOpIsCoinstakeWithP2PKH) {
-            if (IsSpendScriptP2PKH(p->scriptPubKey)) {
-                return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-opiscoinstake-spend-p2pkh");
-            }
-        }
-    }
-
-    return true;
-}
-
-bool CheckBlindOutput(CValidationState &state, const CTxOutCT *p)
-{
-    if (p->vData.size() < 33 || p->vData.size() > 33 + 5 + 33) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-ctout-ephem-size");
-    }
-
-    size_t nRangeProofLen = 5134;
-    if (p->vRangeproof.size() < 500 || p->vRangeproof.size() > nRangeProofLen) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-ctout-rangeproof-size");
-    }
-
-    if ((fBusyImporting) && fSkipRangeproof) {
-        return true;
-    }
-
-    uint64_t min_value = 0, max_value = 0;
-    int rv = 0;
-
-    if (state.fBulletproofsActive) {
-        rv = secp256k1_bulletproof_rangeproof_verify(secp256k1_ctx_blind,
-            blind_scratch, blind_gens, p->vRangeproof.data(), p->vRangeproof.size(),
-            nullptr, &p->commitment, 1, 64, &secp256k1_generator_const_h, nullptr, 0);
-    } else {
-        rv = secp256k1_rangeproof_verify(secp256k1_ctx_blind, &min_value, &max_value,
-            &p->commitment, p->vRangeproof.data(), p->vRangeproof.size(),
-            nullptr, 0,
-            secp256k1_generator_h);
-    }
-
-    if (LogAcceptCategory(BCLog::RINGCT)) {
-        LogPrintf("%s: rv, min_value, max_value %d, %s, %s\n", __func__,
-            rv, FormatMoney((CAmount)min_value), FormatMoney((CAmount)max_value));
-    }
-
-    if (rv != 1) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-ctout-rangeproof-verify");
-    }
-
-    return true;
-}
-
-bool CheckAnonOutput(CValidationState &state, const CTxOutRingCT *p)
-{
-    if (Params().NetworkID() == "main") {
-        return state.DoS(100, false, REJECT_INVALID, "AnonOutput in mainnet");
-    }
-
-    if (p->vData.size() < 33 || p->vData.size() > 33 + 5 + 33) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-rctout-ephem-size");
-    }
-
-    size_t nRangeProofLen = 5134;
-    if (p->vRangeproof.size() < 500 || p->vRangeproof.size() > nRangeProofLen) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-rctout-rangeproof-size");
-    }
-
-    if ((fBusyImporting) && fSkipRangeproof) {
-        return true;
-    }
-
-    uint64_t min_value = 0, max_value = 0;
-    int rv = 0;
-
-    if (state.fBulletproofsActive) {
-        rv = secp256k1_bulletproof_rangeproof_verify(secp256k1_ctx_blind,
-            blind_scratch, blind_gens, p->vRangeproof.data(), p->vRangeproof.size(),
-            nullptr, &p->commitment, 1, 64, &secp256k1_generator_const_h, nullptr, 0);
-    } else {
-        rv = secp256k1_rangeproof_verify(secp256k1_ctx_blind, &min_value, &max_value,
-            &p->commitment, p->vRangeproof.data(), p->vRangeproof.size(),
-            nullptr, 0,
-            secp256k1_generator_h);
-    }
-
-    if (LogAcceptCategory(BCLog::RINGCT)) {
-        LogPrintf("%s: rv, min_value, max_value %d, %s, %s\n", __func__,
-            rv, FormatMoney((CAmount)min_value), FormatMoney((CAmount)max_value));
-    }
-
-    if (rv != 1) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-rctout-rangeproof-verify");
-    }
-
-    return true;
-}
-
-bool CheckDataOutput(CValidationState &state, const CTxOutData *p)
-{
-    if (p->vData.size() < 1) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-output-data-size");
-    }
-
-    const size_t MAX_DATA_OUTPUT_SIZE = 34 + 5 + 34; // DO_STEALTH 33, DO_STEALTH_PREFIX 4, DO_NARR_CRYPT (max 32 bytes)
-    if (p->vData.size() > MAX_DATA_OUTPUT_SIZE) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-output-data-size");
-    }
-
-    return true;
-}
-
-bool CheckTransaction(const CTransaction& tx, CValidationState &state, bool fCheckDuplicateInputs)
-{
-    // Basic checks that don't depend on any context
-    if (tx.vin.empty())
-        return state.DoS(10, false, REJECT_INVALID, "bad-txns-vin-empty");
-
-    // Size limits (this doesn't take the witness into account, as that hasn't been checked for malleability)
-    if (::GetSerializeSize(tx, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) * WITNESS_SCALE_FACTOR > MAX_BLOCK_WEIGHT)
-        return state.DoS(100, false, REJECT_INVALID, "bad-txns-oversize");
-
-    if (tx.IsParticlVersion()) {
-        const Consensus::Params& consensusParams = Params().GetConsensus();
-        if (tx.vpout.empty()) {
-            return state.DoS(10, false, REJECT_INVALID, "bad-txns-vpout-empty");
-        }
-        if (!tx.vout.empty()) {
-            return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-not-empty");
-        }
-
-        size_t nStandardOutputs = 0;
-        CAmount nValueOut = 0;
-        size_t nDataOutputs = 0;
-        for (const auto &txout : tx.vpout) {
-            switch (txout->nVersion) {
-                case OUTPUT_STANDARD:
-                    if (!CheckStandardOutput(state, consensusParams, (CTxOutStandard*) txout.get(), nValueOut))
-                        return false;
-                    nStandardOutputs++;
-                    break;
-                case OUTPUT_CT:
-                    if (!CheckBlindOutput(state, (CTxOutCT*) txout.get()))
-                        return false;
-                    break;
-                case OUTPUT_RINGCT:
-                    if (!CheckAnonOutput(state, (CTxOutRingCT*) txout.get()))
-                        return false;
-                    break;
-                case OUTPUT_DATA:
-                    if (!CheckDataOutput(state, (CTxOutData*) txout.get()))
-                        return false;
-                    nDataOutputs++;
-                    break;
-                default:
-                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-unknown-output-version");
-            }
-
-            if (!MoneyRange(nValueOut)) {
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-txouttotal-toolarge");
-            }
-        }
-
-        if (nDataOutputs > 1 + nStandardOutputs) { // extra 1 for ct fee output
-            return state.DoS(100, false, REJECT_INVALID, "too-many-data-outputs");
-        }
-    } else {
-        if (fParticlMode)
-            return state.DoS(100, false, REJECT_INVALID, "bad-txn-version");
-
-        if (tx.vout.empty())
-            return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-empty");
-
-        // Check for negative or overflow output values
-        CAmount nValueOut = 0;
-        for (const auto& txout : tx.vout)
-        {
-            if (txout.nValue < 0)
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-vout-negative");
-            if (txout.nValue > MAX_MONEY)
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-vout-toolarge");
-            nValueOut += txout.nValue;
-            if (!MoneyRange(nValueOut))
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-txouttotal-toolarge");
-        }
-    }
-
-    // Check for duplicate inputs - note that this check is slow so we skip it in CheckBlock
-    if (fCheckDuplicateInputs) {
-        std::set<COutPoint> vInOutPoints;
-        for (const auto& txin : tx.vin)
-        {
-            if (!txin.IsAnonInput()
-                && !vInOutPoints.insert(txin.prevout).second)
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-inputs-duplicate");
-        };
-    }
-
-    if (tx.IsCoinBase())
-    {
-        if (tx.vin[0].scriptSig.size() < 2 || tx.vin[0].scriptSig.size() > 100)
-            return state.DoS(100, false, REJECT_INVALID, "bad-cb-length");
-    } else
-    {
-        for (const auto& txin : tx.vin)
-            if (!txin.IsAnonInput() && txin.prevout.IsNull())
-                return state.DoS(10, false, REJECT_INVALID, "bad-txns-prevout-null");
-    };
-
-    return true;
-}
-
-bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& nTxFee)
+bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee)
 {
     // reset per tx
     state.fHasAnonOutput = false;
     state.fHasAnonInput = false;
 
-    // early out for particl txns
-    if (tx.IsParticlVersion() && tx.vin.size() < 1) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-txn-no-inputs", false,
+    if (!state.m_consensus_params) {
+        state.m_consensus_params = &::Params().GetConsensus();
+    }
+
+    bool is_particl_tx = tx.IsParticlVersion();
+    if (is_particl_tx && tx.vin.size() < 1) { // early out
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txn-no-inputs",
                          strprintf("%s: no inputs", __func__));
     }
 
     // are the actual inputs available?
     if (!inputs.HaveInputs(tx)) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-txns-inputs-missingorspent", false,
+        return state.Invalid(TxValidationResult::TX_MISSING_INPUTS, "bad-txns-inputs-missingorspent",
                          strprintf("%s: inputs missing/spent", __func__));
     }
 
@@ -444,12 +213,11 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
     CAmount nFees = 0;
     for (unsigned int i = 0; i < tx.vin.size(); i++)
     {
-        if (tx.vin[i].IsAnonInput())
-        {
+        if (tx.vin[i].IsAnonInput()) {
             state.fHasAnonInput = true;
             nRingCT++;
             continue;
-        };
+        }
 
         const COutPoint &prevout = tx.vin[i].prevout;
         const Coin& coin = inputs.AccessCoin(prevout);
@@ -460,178 +228,395 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
         {
             if (nSpendHeight - coin.nHeight < COINBASE_MATURITY)
             {
-                if (fParticlMode)
-                {
+                if (is_particl_tx) {
                     // Scale in the depth restriction to start the chain
                     int nRequiredDepth = std::min(COINBASE_MATURITY, (int)(coin.nHeight / 2));
                     if (nSpendHeight - coin.nHeight < nRequiredDepth) {
-                        return state.Invalid(false,
-                            REJECT_INVALID, "bad-txns-premature-spend-of-coinbase",
+                        return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND,
+                            "bad-txns-premature-spend-of-coinbase",
                             strprintf("tried to spend coinbase at height %d at depth %d, required %d", coin.nHeight, nSpendHeight - coin.nHeight, nRequiredDepth));
                     }
                 } else
-                return state.Invalid(false,
-                    REJECT_INVALID, "bad-txns-premature-spend-of-coinbase",
+                return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "bad-txns-premature-spend-of-coinbase",
                     strprintf("tried to spend coinbase at depth %d", nSpendHeight - coin.nHeight));
             }
         }
 
         // Check for negative or overflow input values
-        if (fParticlMode)
-        {
-            if (coin.nType == OUTPUT_STANDARD)
-            {
+        if (is_particl_tx) {
+            if (coin.nType == OUTPUT_STANDARD) {
                 nValueIn += coin.out.nValue;
-                if (!MoneyRange(coin.out.nValue) || !MoneyRange(nValueIn))
-                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-inputvalues-outofrange");
+                if (!MoneyRange(coin.out.nValue) || !MoneyRange(nValueIn)) {
+                    return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-inputvalues-outofrange");
+                }
                 nStandard++;
             } else
-            if (coin.nType == OUTPUT_CT)
-            {
+            if (coin.nType == OUTPUT_CT) {
                 vpCommitsIn.push_back(&coin.commitment);
                 nCt++;
-            } else
-            {
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-input-type");
-            };
-        } else
-        {
+            } else {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-input-type");
+            }
+        } else {
             nValueIn += coin.out.nValue;
-            if (!MoneyRange(coin.out.nValue) || !MoneyRange(nValueIn))
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-inputvalues-outofrange");
-        };
+            if (!MoneyRange(coin.out.nValue) || !MoneyRange(nValueIn)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-inputvalues-outofrange");
+            }
+        }
     }
 
-    if ((nStandard > 0) + (nCt > 0) + (nRingCT > 0) > 1)
-        return state.DoS(100, false, REJECT_INVALID, "mixed-input-types");
+    if ((nStandard > 0) + (nCt > 0) + (nRingCT > 0) > 1) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "mixed-input-types");
+    }
 
     size_t nRingCTInputs = nRingCT;
     // GetPlainValueOut adds to nStandard, nCt, nRingCT
     CAmount nPlainValueOut = tx.GetPlainValueOut(nStandard, nCt, nRingCT);
     state.fHasAnonOutput = nRingCT > nRingCTInputs;
 
-    nTxFee = 0;
-    if (fParticlMode)
-    {
-        if (!tx.IsCoinStake())
-        {
+    txfee = 0;
+    if (is_particl_tx) {
+        if (!tx.IsCoinStake()) {
             // Tally transaction fees
-            if (nCt > 0 || nRingCT > 0)
-            {
-                if (!tx.GetCTFee(nTxFee))
-                    return state.DoS(100, error("%s: bad-fee-output", __func__),
-                        REJECT_INVALID, "bad-fee-output");
-            } else
-            {
-                nTxFee = nValueIn - nPlainValueOut;
+            if (nCt > 0 || nRingCT > 0) {
+                if (!tx.GetCTFee(txfee)) {
+                    LogPrintf("%s: bad-fee-output\n", __func__);
+                    return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-fee-output");
+                }
+            } else {
+                txfee = nValueIn - nPlainValueOut;
 
-                if (nValueIn < nPlainValueOut)
-                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-in-belowout", false,
+                if (nValueIn < nPlainValueOut) {
+                    return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-in-belowout",
                         strprintf("value in (%s) < value out (%s)", FormatMoney(nValueIn), FormatMoney(nPlainValueOut)));
-            };
+                }
+            }
 
-            if (nTxFee < 0)
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-negative");
-            nFees += nTxFee;
-            if (!MoneyRange(nFees))
-                return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-outofrange");
+            if (txfee < 0) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-negative");
+            }
+            nFees += txfee;
+            if (!MoneyRange(nFees)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-outofrange");
+            }
 
             // Enforce smsg fees
-            CAmount nTotalMsgFees = 0;
-            for (const auto &v : tx.vpout)
-            {
-                if (!v->IsType(OUTPUT_DATA))
-                    continue;
-                CTxOutData *txd = (CTxOutData*) v.get();
-                if (txd->vData.size() < 25 || txd->vData[0] != DO_FUND_MSG)
-                    continue;
-                size_t n = (txd->vData.size()-1) / 24;
-                for (size_t k = 0; k < n; ++k)
-                {
-                    uint32_t *nAmount = (uint32_t*)&txd->vData[1+k*24+20];
-                    nTotalMsgFees += *nAmount;
-                };
-            };
-            if (nTotalMsgFees > 0)
-            {
+            CAmount nTotalMsgFees = tx.GetTotalSMSGFees();
+            if (nTotalMsgFees > 0) {
                 size_t nTxBytes = GetVirtualTransactionSize(tx);
-                CFeeRate fundingTxnFeeRate = CFeeRate(smsg::nFundingTxnFeePerK);
+                CFeeRate fundingTxnFeeRate = CFeeRate(state.m_consensus_params->smsg_fee_funding_tx_per_k);
                 CAmount nTotalExpectedFees = nTotalMsgFees + fundingTxnFeeRate.GetFee(nTxBytes);
 
-                if (nTxFee < nTotalExpectedFees)
-                {
-                    if (state.fEnforceSmsgFees)
-                        return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-smsg", false,
-                            strprintf("fees (%s) < expected (%s)", FormatMoney(nTxFee), FormatMoney(nTotalExpectedFees)));
-                    else
-                        LogPrintf("%s: bad-txns-fee-smsg, %d expected %d, not enforcing.\n", __func__, nTxFee, nTotalExpectedFees);
-                };
-            };
-        } else
-        {
-            // Return stake reward in nTxFee
-            nTxFee = nPlainValueOut - nValueIn;
-            if (nCt > 0 || nRingCT > 0) { // counters track both outputs and inputs
-                return state.DoS(100, error("ConnectBlock(): non-standard elements in coinstake"),
-                     REJECT_INVALID, "bad-coinstake-outputs");
-            };
-        };
-    } else
-    {
-        if (nValueIn < tx.GetValueOut())
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-in-belowout", false,
+                if (txfee < nTotalExpectedFees) {
+                    if (state.fEnforceSmsgFees) {
+                        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-smsg",
+                            strprintf("fees (%s) < expected (%s)", FormatMoney(txfee), FormatMoney(nTotalExpectedFees)));
+                    } else {
+                        LogPrintf("%s: bad-txns-fee-smsg, %d expected %d, not enforcing.\n", __func__, txfee, nTotalExpectedFees);
+                    }
+                }
+            }
+        } else {
+            // Return stake reward in txfee
+            txfee = nPlainValueOut - nValueIn;
+            if (nCt > 0 || nRingCT > 0) { // Counters track both outputs and inputs
+                LogPrintf("%s: non-standard elements in coinstake\n", __func__);
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-coinstake-output");
+            }
+        }
+    } else {
+        if (nValueIn < tx.GetValueOut()) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-in-belowout",
                 strprintf("value in (%s) < value out (%s)", FormatMoney(nValueIn), FormatMoney(tx.GetValueOut())));
+        }
 
         // Tally transaction fees
-        nTxFee = nValueIn - tx.GetValueOut();
-        if (nTxFee < 0)
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-negative");
-        nFees += nTxFee;
-        if (!MoneyRange(nFees))
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-outofrange");
-    };
+        txfee = nValueIn - tx.GetValueOut();
+        nFees += txfee;
+        if (!MoneyRange(nFees)) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-outofrange");
+        }
+    }
 
-    if (nCt > 0 && nRingCT == 0)
-    {
-        nPlainValueOut += nTxFee;
+    if (nCt > 0 && nRingCT == 0) {
+        nPlainValueOut += txfee;
 
-        if (!MoneyRange(nPlainValueOut))
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-out-outofrange");
-
-        if (!MoneyRange(nValueIn))
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-in-outofrange");
+        if (!MoneyRange(nPlainValueOut)) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-out-outofrange");
+        }
+        if (!MoneyRange(nValueIn)) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-inputvalues-outofrange");
+        }
 
         // commitments must sum to 0
         secp256k1_pedersen_commitment plainInCommitment, plainOutCommitment;
         uint8_t blindPlain[32];
         memset(blindPlain, 0, 32);
-        if (nValueIn > 0)
-        {
-            if (!secp256k1_pedersen_commit(secp256k1_ctx_blind, &plainInCommitment, blindPlain, (uint64_t) nValueIn, &secp256k1_generator_const_h, &secp256k1_generator_const_g))
-                return state.Invalid(false, REJECT_INVALID, "commit-failed");
+        if (nValueIn > 0) {
+            if (!secp256k1_pedersen_commit(secp256k1_ctx_blind, &plainInCommitment, blindPlain, (uint64_t) nValueIn, &secp256k1_generator_const_h, &secp256k1_generator_const_g)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "commit-failed");
+            }
             vpCommitsIn.push_back(&plainInCommitment);
-        };
+        }
 
-        if (nPlainValueOut > 0)
-        {
-            if (!secp256k1_pedersen_commit(secp256k1_ctx_blind, &plainOutCommitment, blindPlain, (uint64_t) nPlainValueOut, &secp256k1_generator_const_h, &secp256k1_generator_const_g))
-                return state.Invalid(false, REJECT_INVALID, "commit-failed");
+        if (nPlainValueOut > 0) {
+            if (!secp256k1_pedersen_commit(secp256k1_ctx_blind, &plainOutCommitment, blindPlain, (uint64_t) nPlainValueOut, &secp256k1_generator_const_h, &secp256k1_generator_const_g)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "commit-failed");
+            }
             vpCommitsOut.push_back(&plainOutCommitment);
-        };
+        }
 
         secp256k1_pedersen_commitment *pc;
-        for (auto &txout : tx.vpout)
-        {
-            if ((pc = txout->GetPCommitment()))
+        for (auto &txout : tx.vpout) {
+            if ((pc = txout->GetPCommitment())) {
                 vpCommitsOut.push_back(pc);
-        };
+            }
+        }
 
         int rv = secp256k1_pedersen_verify_tally(secp256k1_ctx_blind,
             vpCommitsIn.data(), vpCommitsIn.size(), vpCommitsOut.data(), vpCommitsOut.size());
 
-        if (rv != 1)
-            return state.DoS(100, false, REJECT_INVALID, "bad-commitment-sum");
-    };
+        if (rv != 1) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-commitment-sum");
+        }
+    }
+
+    return true;
+}
+
+
+
+static bool CheckStandardOutput(TxValidationState &state, const CTxOutStandard *p, CAmount &nValueOut)
+{
+    if (p->nValue < 0)
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-negative");
+    if (p->nValue > MAX_MONEY)
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-toolarge");
+    nValueOut += p->nValue;
+
+    if (HasIsCoinstakeOp(p->scriptPubKey)) {
+        if (GetAdjustedTime() < state.m_consensus_params->OpIsCoinstakeTime) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-opiscoinstake");
+        }
+        if (!state.m_consensus_params->fAllowOpIsCoinstakeWithP2PKH) {
+            if (IsSpendScriptP2PKH(p->scriptPubKey)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-opiscoinstake-spend-p2pkh");
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool CheckBlindOutput(TxValidationState &state, const CTxOutCT *p)
+{
+    if (p->vData.size() < 33 || p->vData.size() > 33 + 5 + 33) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-ctout-ephem-size");
+    }
+    size_t nRangeProofLen = 5134;
+    if (p->vRangeproof.size() < 500 || p->vRangeproof.size() > nRangeProofLen) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-ctout-rangeproof-size");
+    }
+
+    if (state.m_skip_rangeproof) {
+        return true;
+    }
+
+    uint64_t min_value = 0, max_value = 0;
+    int rv = 0;
+
+    if (state.fBulletproofsActive) {
+        rv = secp256k1_bulletproof_rangeproof_verify(secp256k1_ctx_blind,
+            blind_scratch, blind_gens, p->vRangeproof.data(), p->vRangeproof.size(),
+            nullptr, &p->commitment, 1, 64, &secp256k1_generator_const_h, nullptr, 0);
+    } else {
+        rv = secp256k1_rangeproof_verify(secp256k1_ctx_blind, &min_value, &max_value,
+            &p->commitment, p->vRangeproof.data(), p->vRangeproof.size(),
+            nullptr, 0,
+            secp256k1_generator_h);
+    }
+
+    if (LogAcceptCategory(BCLog::RINGCT)) {
+        LogPrintf("%s: rv, min_value, max_value %d, %s, %s\n", __func__,
+            rv, FormatMoney((CAmount)min_value), FormatMoney((CAmount)max_value));
+    }
+
+    if (rv != 1) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-ctout-rangeproof-verify");
+    }
+
+    return true;
+}
+
+bool CheckAnonOutput(TxValidationState &state, const CTxOutRingCT *p)
+{
+    if (!state.rct_active) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "rctout-before-active");
+    }
+    if (p->vData.size() < 33 || p->vData.size() > 33 + 5 + 33) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-rctout-ephem-size");
+    }
+
+    size_t nRangeProofLen = 5134;
+    if (p->vRangeproof.size() < 500 || p->vRangeproof.size() > nRangeProofLen) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-rctout-rangeproof-size");
+    }
+
+    if (state.m_skip_rangeproof) {
+        return true;
+    }
+
+    uint64_t min_value = 0, max_value = 0;
+    int rv = 0;
+
+    if (state.fBulletproofsActive) {
+        rv = secp256k1_bulletproof_rangeproof_verify(secp256k1_ctx_blind,
+            blind_scratch, blind_gens, p->vRangeproof.data(), p->vRangeproof.size(),
+            nullptr, &p->commitment, 1, 64, &secp256k1_generator_const_h, nullptr, 0);
+    } else {
+        rv = secp256k1_rangeproof_verify(secp256k1_ctx_blind, &min_value, &max_value,
+            &p->commitment, p->vRangeproof.data(), p->vRangeproof.size(),
+            nullptr, 0,
+            secp256k1_generator_h);
+    }
+
+    if (LogAcceptCategory(BCLog::RINGCT)) {
+        LogPrintf("%s: rv, min_value, max_value %d, %s, %s\n", __func__,
+            rv, FormatMoney((CAmount)min_value), FormatMoney((CAmount)max_value));
+    }
+
+    if (rv != 1) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-rctout-rangeproof-verify");
+    }
+
+    return true;
+}
+
+static bool CheckDataOutput(TxValidationState &state, const CTxOutData *p)
+{
+    if (p->vData.size() < 1) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-output-data-size");
+    }
+
+    const size_t MAX_DATA_OUTPUT_SIZE = 34 + 5 + 34; // DO_STEALTH 33, DO_STEALTH_PREFIX 4, DO_NARR_CRYPT (max 32 bytes)
+    if (p->vData.size() > MAX_DATA_OUTPUT_SIZE) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-output-data-size");
+    }
+
+    return true;
+}
+
+bool CheckTransaction(const CTransaction& tx, TxValidationState &state)
+{
+    // Basic checks that don't depend on any context
+    if (tx.vin.empty())
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vin-empty");
+
+    // Size limits (this doesn't take the witness into account, as that hasn't been checked for malleability)
+    if (::GetSerializeSize(tx, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) * WITNESS_SCALE_FACTOR > MAX_BLOCK_WEIGHT)
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-oversize");
+
+    if (tx.IsParticlVersion()) {
+        if (tx.vpout.empty()) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vpout-empty");
+        }
+        if (!tx.vout.empty()) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-not-empty");
+        }
+
+        size_t nStandardOutputs = 0, nDataOutputs = 0, nBlindOutputs = 0, nAnonOutputs = 0;
+        CAmount nValueOut = 0;
+        for (const auto &txout : tx.vpout) {
+            switch (txout->nVersion) {
+                case OUTPUT_STANDARD:
+                    if (!CheckStandardOutput(state, (CTxOutStandard*) txout.get(), nValueOut)) {
+                        return false;
+                    }
+                    nStandardOutputs++;
+                    break;
+                case OUTPUT_CT:
+                    if (!CheckBlindOutput(state, (CTxOutCT*) txout.get())) {
+                        return false;
+                    }
+                    nBlindOutputs++;
+                    break;
+                case OUTPUT_RINGCT:
+                    if (!CheckAnonOutput(state, (CTxOutRingCT*) txout.get())) {
+                        return false;
+                    }
+                    nAnonOutputs++;
+                    break;
+                case OUTPUT_DATA:
+                    if (!CheckDataOutput(state, (CTxOutData*) txout.get())) {
+                        return false;
+                    }
+                    nDataOutputs++;
+                    break;
+                default:
+                    return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-unknown-output-version");
+            }
+
+            if (!MoneyRange(nValueOut)) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-txouttotal-toolarge");
+            }
+        }
+
+        size_t max_data_outputs = 1 + nStandardOutputs; // extra 1 for ct fee output
+        if (state.fIncDataOutputs) {
+            max_data_outputs += nBlindOutputs + nAnonOutputs;
+        }
+        if (nDataOutputs > max_data_outputs) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "too-many-data-outputs");
+        }
+    } else {
+        if (state.m_particl_mode) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txn-version");
+        }
+        if (tx.vout.empty()) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-empty");
+        }
+
+        // Check for negative or overflow output values
+        CAmount nValueOut = 0;
+        for (const auto& txout : tx.vout)
+        {
+            if (txout.nValue < 0)
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-negative");
+            if (txout.nValue > MAX_MONEY)
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-vout-toolarge");
+            nValueOut += txout.nValue;
+            if (!MoneyRange(nValueOut))
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-txouttotal-toolarge");
+        }
+    }
+
+    // Check for duplicate inputs (see CVE-2018-17144)
+    // While Consensus::CheckTxInputs does check if all inputs of a tx are available, and UpdateCoins marks all inputs
+    // of a tx as spent, it does not check if the tx has duplicate inputs.
+    // Failure to run this check will result in either a crash or an inflation bug, depending on the implementation of
+    // the underlying coins database.
+    std::set<COutPoint> vInOutPoints;
+    for (const auto& txin : tx.vin)
+    {
+        if (!txin.IsAnonInput()
+            && !vInOutPoints.insert(txin.prevout).second) {
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-inputs-duplicate");
+        }
+    }
+
+    if (tx.IsCoinBase())
+    {
+        if (tx.vin[0].scriptSig.size() < 2 || tx.vin[0].scriptSig.size() > 100)
+            return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-cb-length");
+    }
+    else
+    {
+        for (const auto& txin : tx.vin) {
+            if (!txin.IsAnonInput() && txin.prevout.IsNull()) {
+                return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-prevout-null");
+            }
+        }
+    }
 
     return true;
 }

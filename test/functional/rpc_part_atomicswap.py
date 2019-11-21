@@ -1,20 +1,39 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018 The Particl Core developers
+# Copyright (c) 2018-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 # Test Decred atomic swap contracts
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose, getIndexAtProperty
-from test_framework.util import *
-from test_framework.script import *
-from test_framework.messages import sha256
-from test_framework.address import chars as __b58chars, script_to_p2sh
+import os
+import time
 import binascii
 from random import random
+from decimal import Decimal
 
-from test_framework.test_particl import jsonDecimal
+from test_framework.test_particl import (
+    ParticlTestFramework,
+    isclose,
+    getIndexAtProperty,
+    connect_nodes_bi,
+)
+from test_framework.script import (
+    CScript,
+    OP_IF,
+    OP_ENDIF,
+    OP_SIZE,
+    OP_EQUALVERIFY,
+    OP_SHA256,
+    OP_HASH160,
+    OP_ELSE,
+    OP_CHECKLOCKTIMEVERIFY,
+    OP_DROP,
+    OP_DUP,
+    OP_CHECKSIG,
+)
+from test_framework.messages import sha256
+from test_framework.address import chars as __b58chars, script_to_p2sh
+from test_framework.authproxy import JSONRPCException
 
 
 def script_to_p2sh_part(b):
@@ -137,7 +156,7 @@ def createRefundTx(node, rawtx, script, lockTime, addrRefundFrom, addrRefundTo):
 
     amountIn = ro['vout'][n]['value']
 
-    rawtxrefund = node.tx(['-create','in='+txnid+':'+str(n)+':1','outaddr='+str(amountIn)+':'+addrRefundTo,'locktime='+str(lockTime)])
+    rawtxrefund = node.tx(['-create', 'in=' + txnid + ':' + str(n) + ':1','outaddr=' + str(amountIn) + ':' + addrRefundTo, 'locktime=' + str(lockTime)])
 
     refundWeight = estimateRefundSerializeSize(script, rawtxrefund)
 
@@ -147,7 +166,7 @@ def createRefundTx(node, rawtx, script, lockTime, addrRefundFrom, addrRefundTo):
 
     amountOut = Decimal(amountIn) - Decimal(fee)
 
-    rawtxrefund = node.tx([rawtxrefund,'delout=0','outaddr='+str(amountOut)+':'+addrRefundTo])
+    rawtxrefund = node.tx([rawtxrefund, 'delout=0', 'outaddr=' + str(amountOut) + ':' + addrRefundTo])
 
 
     scripthex = binascii.hexlify(script).decode("utf-8")
@@ -169,7 +188,7 @@ def createRefundTx(node, rawtx, script, lockTime, addrRefundFrom, addrRefundTo):
         scripthex
     ]
 
-    rawtxrefund = node.tx([rawtxrefund,'witness=0:'+ ':'.join(witnessStack)])
+    rawtxrefund = node.tx([rawtxrefund, 'witness=0:' + ':'.join(witnessStack)])
     return rawtxrefund
 
 
@@ -192,7 +211,7 @@ def createClaimTx(node, rawtx, script, secret, addrClaimFrom, addrClaimTo):
 
     amountOut = Decimal(amountIn) - Decimal(fee)
 
-    rawtxClaim = node.tx([rawtxClaim,'delout=0','outaddr='+str(amountOut)+':'+addrClaimTo])
+    rawtxClaim = node.tx([rawtxClaim, 'delout=0', 'outaddr=' + str(amountOut) + ':' + addrClaimTo])
 
     scripthex = binascii.hexlify(script).decode("utf-8")
     prevtx = {
@@ -214,7 +233,7 @@ def createClaimTx(node, rawtx, script, secret, addrClaimFrom, addrClaimTo):
         '01',
         scripthex
     ]
-    rawtxClaim = node.tx([rawtxClaim,'witness=0:'+ ':'.join(witnessStack)])
+    rawtxClaim = node.tx([rawtxClaim, 'witness=0:' + ':'.join(witnessStack)])
 
     assert(node.testmempoolaccept([rawtxClaim,])[0]['allowed'] == True)
     return rawtxClaim
@@ -272,7 +291,7 @@ def createRefundTxCT(node, rawtx, output_amounts, script, lockTime, privKeySign,
         '00',
         scripthex
     ]
-    rawtxrefund = node.tx([rawtxrefund,'witness=0:'+ ':'.join(witnessStack)])
+    rawtxrefund = node.tx([rawtxrefund, 'witness=0:' + ':'.join(witnessStack)])
 
     ro = node.decoderawtransaction(rawtxrefund)
     assert(len(ro['vin'][0]['txinwitness']) == 4)
@@ -335,16 +354,18 @@ def createClaimTxCT(node, rawtx, output_amounts, script, secret, privKeySign, pu
         '01',
         scripthex
     ]
-    rawtxClaim = node.tx([rawtxClaim,'witness=0:'+ ':'.join(witnessStack)])
+    rawtxClaim = node.tx([rawtxClaim, 'witness=0:' + ':'.join(witnessStack)])
 
     ro = node.decoderawtransaction(rawtxClaim)
     assert(len(ro['vin'][0]['txinwitness']) == 5)
 
     return rawtxClaim
 
+
 # Return a random amount lower than 10
 def getRandomAmount():
     return round(Decimal(random()) * 9 + Decimal(1.2), 8)
+
 
 class AtomicSwapTest(ParticlTestFramework):
     def set_test_params(self):
@@ -593,7 +614,8 @@ class AtomicSwapTest(ParticlTestFramework):
 
         rawtx_i_refund = createRefundTxCT(nodes[0], rawtx_i, output_amounts_i, scriptInitiate, lockTime, privKeyA, pubKeyA, addrA_sx)
         ro = nodes[0].testmempoolaccept([rawtx_i_refund,])
-        assert('64: non-final' in ro[0]['reject-reason'])
+        print(ro)
+        assert('non-final' in ro[0]['reject-reason'])
 
         txnid1 = nodes[0].sendrawtransaction(rawtx_i)
         self.stakeBlocks(1)
@@ -638,7 +660,7 @@ class AtomicSwapTest(ParticlTestFramework):
 
         rawtx_p_refund = createRefundTxCT(nodes[1], rawtx_p, output_amounts_p, scriptParticipate, lockTime, privKeyB, pubKeyB, addrB_sx)
         ro = nodes[1].testmempoolaccept([rawtx_p_refund,])
-        assert('64: non-final' in ro[0]['reject-reason'])
+        assert('non-final' in ro[0]['reject-reason'])
 
         txnid_p = nodes[0].sendrawtransaction(rawtx_p)
         self.stakeBlocks(1)

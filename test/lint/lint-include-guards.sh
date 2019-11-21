@@ -10,7 +10,7 @@ export LC_ALL=C
 HEADER_ID_PREFIX="(BITCOIN_|PARTICL_)"
 HEADER_ID_SUFFIX="_H"
 
-REGEXP_EXCLUDE_FILES_WITH_PREFIX="src/(crypto/ctaes/|leveldb/|secp256k1/|tinyformat.h|univalue/|key/wordlists/|xxhash/|unilib/|lz4/|usbdevice/ledger/)"
+REGEXP_EXCLUDE_FILES_WITH_PREFIX="src/(crypto/ctaes/|leveldb/|secp256k1/|test/fuzz/FuzzedDataProvider.h|tinyformat.h|univalue/|key/wordlists/|xxhash/|unilib/|lz4/|usbdevice/ledger/)"
 
 EXIT_CODE=0
 for HEADER_FILE in $(git ls-files -- "*.h" | grep -vE "^${REGEXP_EXCLUDE_FILES_WITH_PREFIX}")

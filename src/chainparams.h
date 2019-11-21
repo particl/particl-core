@@ -106,6 +106,7 @@ public:
     const std::vector<std::pair<int64_t, DevFundSettings> > &GetDevFundSettings() const {return vDevFundSettings;};
 
     int64_t GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64_t nFees) const;
+    int64_t GetMaxSmsgFeeRateDelta(int64_t smsg_fee_prev) const;
 
     bool CheckImportCoinbase(int nHeight, uint256 &hash) const;
     uint32_t GetLastImportHeight() const { return nLastImportHeight; }
@@ -115,13 +116,17 @@ public:
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
     /** Policy: Filter transactions that do not match well-defined patterns */
     bool RequireStandard() const { return fRequireStandard; }
+    /** If this chain is exclusively used for testing */
+    bool IsTestChain() const { return m_is_test_chain; }
     uint64_t PruneAfterHeight() const { return nPruneAfterHeight; }
-    /** Make miner stop after a block is found. In RPC, don't return until nGenProcLimit blocks are generated */
-    bool MineBlocksOnDemand() const { return fMineBlocksOnDemand; }
-    /** Return the BIP70 network string (main, test or regtest) */
+    /** Minimum free space (in GB) needed for data directory */
+    uint64_t AssumedBlockchainSize() const { return m_assumed_blockchain_size; }
+    /** Minimum free space (in GB) needed for data directory when pruned; Does not include prune target*/
+    uint64_t AssumedChainStateSize() const { return m_assumed_chain_state_size; }
+    /** Whether it is possible to mine blocks on demand (no retargeting) */
+    bool MineBlocksOnDemand() const { return consensus.fPowNoRetargeting; }
+    /** Return the network string */
     std::string NetworkIDString() const { return strNetworkID; }
-    /** Return true if the fallback fee is by default enabled for this network */
-    bool IsFallbackFeeEnabled() const { return m_fallback_fee_enabled; }
     /** Return the list of hostnames to look up for DNS seeds */
     const std::vector<std::string>& DNSSeeds() const { return vSeeds; }
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
@@ -149,8 +154,9 @@ protected:
     void SetLastImportHeight()
     {
         nLastImportHeight = 0;
-        for (auto cth : vImportedCoinbaseTxns)
+        for (auto cth : vImportedCoinbaseTxns) {
             nLastImportHeight = std::max(nLastImportHeight, cth.nHeight);
+        }
     }
 
     Consensus::Params consensus;
@@ -173,6 +179,8 @@ protected:
 
 
     uint64_t nPruneAfterHeight;
+    uint64_t m_assumed_blockchain_size;
+    uint64_t m_assumed_chain_state_size;
     std::vector<std::string> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     std::vector<unsigned char> bech32Prefixes[MAX_BASE58_TYPES];
@@ -182,10 +190,9 @@ protected:
     std::vector<SeedSpec6> vFixedSeeds;
     bool fDefaultConsistencyChecks;
     bool fRequireStandard;
-    bool fMineBlocksOnDemand;
+    bool m_is_test_chain;
     CCheckpointData checkpointData;
     ChainTxData chainTxData;
-    bool m_fallback_fee_enabled;
 };
 
 /**
@@ -203,7 +210,7 @@ const CChainParams &Params();
 const CChainParams *pParams();
 
 /**
- * Sets the params returned by Params() to those for the given BIP70 chain name.
+ * Sets the params returned by Params() to those for the given chain name.
  * @throws std::runtime_error when the chain is not supported.
  */
 void SelectParams(const std::string& chain);

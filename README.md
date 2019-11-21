@@ -11,7 +11,7 @@ What is Particl?
 An open source, decentralized privacy platform
 built for global person to person eCommerce.
 
-For more information, as well as an immediately useable, binary version of
+For more information, as well as an immediately usable, binary version of
 the Particl Core software, see https://particl.io.
 
 

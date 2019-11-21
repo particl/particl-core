@@ -1,9 +1,10 @@
-// Copyright (c) 2018 The Particl Core developers
+// Copyright (c) 2018-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <usbdevice/usbdevice.h>
 
+#include <key/extkey.h>
 #include <usbdevice/debugdevice.h>
 #include <usbdevice/ledgerdevice.h>
 #include <usbdevice/trezordevice.h>
@@ -11,8 +12,7 @@
 
 #include <hidapi/hidapi.h>
 
-#include <stdio.h>
-#include <inttypes.h>
+#include <stdint.h>
 #include <univalue.h>
 #include <chainparams.h>
 
@@ -26,7 +26,9 @@ namespace usb_device {
 
 const DeviceType usbDeviceTypes[] = {
     DeviceType(0xffff, 0x0001, "Debug", "Device", USBDEVICE_DEBUG),
+    DeviceType(0x2c97, 0x0000, "Ledger", "Blue", USBDEVICE_LEDGER_BLUE),
     DeviceType(0x2c97, 0x0001, "Ledger", "Nano S", USBDEVICE_LEDGER_NANO_S),
+    DeviceType(0x2c97, 0x0004, "Ledger", "Nano X", USBDEVICE_LEDGER_NANO_X),
     //DeviceType(0x534c, 0x0001, "Trezor", "One", USBDEVICE_TREZOR_ONE),
 };
 
@@ -90,13 +92,14 @@ void ListHIDDevices(std::vector<std::unique_ptr<CUSBDevice> > &vDevices)
     devs = hid_enumerate(0x0, 0x0);
     cur_dev = devs;
     while (cur_dev) {
+        if (cur_dev->serial_number) // Possibly no access permission, check udev rules.
         for (const auto &type : usbDeviceTypes) {
             if (cur_dev->vendor_id != type.nVendorId
                 || cur_dev->product_id != type.nProductId) {
                 continue;
             }
 
-            if (type.type == USBDEVICE_LEDGER_NANO_S
+            if ((type.type == USBDEVICE_LEDGER_BLUE || type.type == USBDEVICE_LEDGER_NANO_S || type.type == USBDEVICE_LEDGER_NANO_X)
                 && MatchLedgerInterface(cur_dev)) {
                 char mbs[128];
                 wcstombs(mbs, cur_dev->serial_number, sizeof(mbs));
@@ -130,6 +133,7 @@ void ListWebUSBDevices(std::vector<std::unique_ptr<CUSBDevice> > &vDevices)
     devs = webusb_enumerate(0x0, 0x0);
     cur_dev = devs;
     while (cur_dev) {
+        if (cur_dev->serial_number) // Possibly no access permission, check udev rules.
         for (const auto &type : webusbDeviceTypes) {
             if (cur_dev->vendor_id != type.nVendorId
                 || cur_dev->product_id != type.nProductId) {
@@ -192,50 +196,53 @@ DeviceSignatureCreator::DeviceSignatureCreator(CUSBDevice *pDeviceIn, const CMut
 {
 };
 
-bool DeviceSignatureCreator::CreateSig(const SigningProvider& provider, std::vector<unsigned char> &vchSig, const CKeyID &keyid, const CScript &scriptCode, SigVersion sigversion) const
+bool DeviceSignatureCreator::CreateSig(const SigningProvider &provider, std::vector<unsigned char> &vchSig, const CKeyID &keyid, const CScript &scriptCode, SigVersion sigversion) const
 {
     if (!pDevice) {
         return false;
     }
 
-    //uint256 hash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion);
-    const CHDWallet *pw = dynamic_cast<const CHDWallet*>(&provider);
-    if (pw) {
-        const CEKAKey *pak = nullptr;
-        const CEKASCKey *pasc = nullptr;
-        CExtKeyAccount *pa = nullptr;
-        if (!pw->HaveKey(keyid, pak, pasc, pa) || !pa) {
-            return false;
-        }
-
-        std::vector<uint32_t> vPath;
-        std::vector<uint8_t> vSharedSecret;
-        if (pak) {
-            if (!pw->GetFullChainPath(pa, pak->nParent, vPath)) {
-                return error("%s: GetFullAccountPath failed.", __func__);
+    const LegacyScriptPubKeyMan *pkm = dynamic_cast<const LegacyScriptPubKeyMan*>(&provider);
+    if (pkm) {
+        //uint256 hash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion);
+        const CHDWallet *pw = dynamic_cast<const CHDWallet*>(pkm->m_particl);
+        if (pw) {
+            const CEKAKey *pak = nullptr;
+            const CEKASCKey *pasc = nullptr;
+            CExtKeyAccount *pa = nullptr;
+            if (!pw->HaveKey(keyid, pak, pasc, pa) || !pa) {
+                return false;
             }
 
-            vPath.push_back(pak->nKey);
-        } else
-        if (pasc) {
-            AccStealthKeyMap::const_iterator miSk = pa->mapStealthKeys.find(pasc->idStealthKey);
-            if (miSk == pa->mapStealthKeys.end()) {
-                return error("%s: CEKASCKey Stealth key not found.", __func__);
-            }
-            if (!pw->GetFullChainPath(pa, miSk->second.akSpend.nParent, vPath)) {
-                return error("%s: GetFullAccountPath failed.", __func__);
-            }
+            std::vector<uint32_t> vPath;
+            std::vector<uint8_t> vSharedSecret;
+            if (pak) {
+                if (!pw->GetFullChainPath(pa, pak->nParent, vPath)) {
+                    return error("%s: GetFullAccountPath failed.", __func__);
+                }
 
-            vPath.push_back(miSk->second.akSpend.nKey);
-            vSharedSecret.resize(32);
-            memcpy(vSharedSecret.data(), pasc->sShared.begin(), 32);
-        } else {
-            return error("%s: HaveKey error.", __func__);
+                vPath.push_back(pak->nKey);
+            } else
+            if (pasc) {
+                AccStealthKeyMap::const_iterator miSk = pa->mapStealthKeys.find(pasc->idStealthKey);
+                if (miSk == pa->mapStealthKeys.end()) {
+                    return error("%s: CEKASCKey Stealth key not found.", __func__);
+                }
+                if (!pw->GetFullChainPath(pa, miSk->second.akSpend.nParent, vPath)) {
+                    return error("%s: GetFullAccountPath failed.", __func__);
+                }
+
+                vPath.push_back(miSk->second.akSpend.nKey);
+                vSharedSecret.resize(32);
+                memcpy(vSharedSecret.data(), pasc->sShared.begin(), 32);
+            } else {
+                return error("%s: HaveKey error.", __func__);
+            }
+            if (0 != pDevice->SignTransaction(vPath, vSharedSecret, txTo, nIn, scriptCode, nHashType, amount, sigversion, vchSig, pDevice->sError)) {
+                return error("%s: SignTransaction failed.", __func__);
+            }
+            return true;
         }
-        if (0 != pDevice->SignTransaction(vPath, vSharedSecret, txTo, nIn, scriptCode, nHashType, amount, sigversion, vchSig, pDevice->sError)) {
-            return error("%s: SignTransaction failed.", __func__);
-        }
-        return true;
     }
 
     const CPathKeyStore *pks = dynamic_cast<const CPathKeyStore*>(&provider);

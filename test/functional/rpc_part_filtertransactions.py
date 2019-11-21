@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
-from test_framework.address import *
+from test_framework.test_particl import ParticlTestFramework, connect_nodes_bi
+from test_framework.authproxy import JSONRPCException
+
 
 class FilterTransactionsTest(ParticlTestFramework):
     def set_test_params(self):
@@ -268,18 +268,33 @@ class FilterTransactionsTest(ParticlTestFramework):
 
         # type 'standard'
         ro = nodes[0].filtertransactions({ 'type': 'standard', 'count': 20 })
+        assert(len(ro) == 9)
         for t in ro:
             assert('type' not in t)
+            for o in t['outputs']:
+                assert('type' not in o)
 
         # type 'anon'
         ro = nodes[0].filtertransactions({ 'type': 'anon', 'count': 20 })
+        assert(len(ro) == 1)
         for t in ro:
-            assert(t["type"] == 'anon')
+            foundA = False
+            for o in t['outputs']:
+                if 'type' in o and o['type'] == 'anon':
+                    foundA = True
+                    break
+            assert(foundA is True)
 
         # type 'blind'
         ro = nodes[0].filtertransactions({ 'type': 'blind', 'count': 20 })
+        assert(len(ro) == 1)
         for t in ro:
-            assert(t["type"] == 'blind')
+            foundB = False
+            for o in t['outputs']:
+                if 'type' in o and o['type'] == 'blind':
+                    foundB = True
+                    break
+            assert(foundB is True)
 
         # invalid transaction type
         try:
@@ -326,6 +341,12 @@ class FilterTransactionsTest(ParticlTestFramework):
             assert(False)
         except JSONRPCException as e:
             assert('Invalid sort' in e.error['message'])
+
+        # Sent blind should show when filtered for blinded txns
+        nodes[0].sendblindtopart(targetStealth, 1.0)
+        ro = nodes[0].filtertransactions({ 'type': 'blind', 'count': 20 })
+        assert(len(ro) == 2)
+
 
 if __name__ == '__main__':
     FilterTransactionsTest().main()

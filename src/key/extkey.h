@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2015 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,7 +19,7 @@ static const uint32_t BIP32_KEY_LEN = 82;       // raw, 74 + 4 bytes id + 4 chec
 static const uint32_t BIP32_KEY_N_BYTES = 74;   // raw without id and checksum
 
 static const uint32_t MAX_KEY_PACK_SIZE = 128;
-static const uint32_t N_DEFAULT_LOOKAHEAD = 64;
+static const uint32_t DEFAULT_LOOKAHEAD_SIZE = 64;
 
 static const uint32_t BIP44_PURPOSE = (((uint32_t)44) | (1 << 31));
 
@@ -68,6 +68,12 @@ enum AccountFlagTypes
 };
 
 enum {HK_NO = 0, HK_YES, HK_LOOKAHEAD, HK_LOOKAHEAD_DO_UPDATE};
+
+inline bool IsHardened(uint32_t n)              { return (n & (1 << 31)); };
+inline uint32_t &SetHardenedBit(uint32_t &n)    { return (n |= (1 << 31)); };
+inline uint32_t &ClearHardenedBit(uint32_t &n)  { return (n &= ~(1 << 31)); };
+inline uint32_t WithHardenedBit(uint32_t n)     { return (n |= (1 << 31)); };
+inline uint32_t WithoutHardenedBit(uint32_t n)  { return (n &= ~(1 << 31)); };
 
 struct CExtPubKey {
     unsigned char nDepth;
@@ -132,7 +138,7 @@ struct CExtKey {
     bool Derive(CExtKey &out, unsigned int nChild) const;
     CExtPubKey Neutered() const;
     void SetSeed(const unsigned char *seed, unsigned int nSeedLen);
-    int SetKeyCode(const unsigned char *pkey, const unsigned char *pcode);
+    void SetKeyCode(const unsigned char *pkey, const unsigned char *pcode);
 
     size_t GetSerializeSize(int nType, int nVersion) const
     {
@@ -173,7 +179,7 @@ struct CExtKey {
 class CExtKeyPair
 {
 public:
-    //uint8_t nFlags; ? crypted
+    //uint8_t nFlags; ? encrypted
     uint8_t nDepth;
     uint8_t vchFingerprint[4];
     uint32_t nChild;
@@ -182,7 +188,7 @@ public:
     CPubKey pubkey;
 
     CExtKeyPair() {};
-    CExtKeyPair(CExtKey &vk)
+    explicit CExtKeyPair(CExtKey &vk)
     {
         nDepth = vk.nDepth;
         memcpy(vchFingerprint, vk.vchFingerprint, sizeof(vchFingerprint));
@@ -192,7 +198,7 @@ public:
         pubkey = key.GetPubKey();
     };
 
-    CExtKeyPair(CExtPubKey &pk)
+    explicit CExtKeyPair(CExtPubKey &pk)
     {
         nDepth = pk.nDepth;
         memcpy(vchFingerprint, pk.vchFingerprint, sizeof(vchFingerprint));
@@ -246,7 +252,7 @@ public:
     CExtPubKey GetExtPubKey() const;
     CExtKeyPair Neutered() const;
     void SetSeed(const unsigned char *seed, unsigned int nSeedLen);
-    int SetKeyCode(const unsigned char *pkey, const unsigned char *pcode);
+    void SetKeyCode(const unsigned char *pkey, const unsigned char *pcode);
 
     template<typename Stream>
     void Serialize(Stream &s) const
@@ -349,7 +355,7 @@ public:
             return rv;
         }
 
-        nChild = nChildOut & ~(1 << 31); // Clear the hardened bit
+        nChild = WithoutHardenedBit(nChildOut);
         if (fUpdate) {
             SetCounter(nChild+1, fHardened);
         }
@@ -663,11 +669,11 @@ public:
     int FreeChains()
     {
         // Keys are normally freed by the wallet
-        std::vector<CStoredExtKey*>::iterator it;
-        for (it = vExtKeys.begin(); it != vExtKeys.end(); ++it) {
+        for (auto it = vExtKeys.begin(); it != vExtKeys.end(); ++it) {
             delete *it;
             *it = nullptr;
         }
+        vExtKeys.clear();
         return 0;
     };
 
@@ -827,7 +833,8 @@ public:
     AccKeySCMap mapStealthChildKeys; // keys derived from stealth addresses
 
     AccStealthKeyMap mapStealthKeys;
-    AccStealthKeyMap mapLookAheadStealth;
+    std::set<const CEKAStealthKey*> setLookAheadStealth;
+    std::set<const CEKAStealthKey*> setLookAheadStealthV2;
 
     std::string sLabel; // account name
     CKeyID idMaster;
@@ -879,13 +886,9 @@ std::vector<uint8_t> &SetString(std::vector<uint8_t> &v, const char *s);
 std::vector<uint8_t> &SetChar(std::vector<uint8_t> &v, const uint8_t c);
 std::vector<uint8_t> &PushUInt32(std::vector<uint8_t> &v, const uint32_t i);
 
-
-inline bool IsHardened(uint32_t n)              { return (n & (1 << 31));};
-inline uint32_t &SetHardenedBit(uint32_t &n)    { return (n |= (1 << 31));};
-inline uint32_t &ClearHardenedBit(uint32_t &n)  { return (n &= ~(1 << 31));};
-inline uint32_t WithHardenedBit(uint32_t n)     { return (n |= (1 << 31));};
-
 int ExtractExtKeyPath(const std::string &sPath, std::vector<uint32_t> &vPath);
+
+int ConvertPath(const std::vector<uint8_t> &path_in, std::vector<uint32_t> &path_out);
 
 int PathToString(const std::vector<uint8_t> &vPath, std::string &sPath, char cH='\'', size_t nStart = 0);
 int PathToString(const std::vector<uint32_t> &vPath, std::string &sPath, char cH='\'', size_t nStart = 0);

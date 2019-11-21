@@ -11,7 +11,6 @@
 #include <streams.h>
 #include <util/system.h>
 #include <util/strencodings.h>
-#include <version.h>
 
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
@@ -144,6 +143,15 @@ public:
 
     void Next();
     void Prev() { piter->Prev(); }
+
+    bool StartsWith(uint8_t b)
+    {
+        leveldb::Slice slKey = piter->key();
+        if (slKey.size() < 1) {
+            return false;
+        }
+        return b == *slKey.data();
+    }
 
     template<typename K> bool GetKey(K& key) {
         leveldb::Slice slKey = piter->key();

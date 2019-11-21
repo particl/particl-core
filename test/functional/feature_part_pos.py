@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose
-from test_framework.util import *
+from test_framework.test_particl import ParticlTestFramework, isclose, connect_nodes_bi
+from test_framework.authproxy import JSONRPCException
 
 
 class PosTest(ParticlTestFramework):
@@ -41,33 +40,28 @@ class PosTest(ParticlTestFramework):
         assert(addrTo256 == 'tpl16a6gjrpfwkqrf8fveajkek07l6a0pxgaayk4y6gyq9zlkxxk2hqqmld6tr')
         [nodes[0].sendtoaddress(addrTo256, 1000) for i in range(4)]
 
-
-        # test reserve balance
-        ro = nodes[0].walletsettings('stakelimit', {'height':1})
-        ro = nodes[0].getwalletinfo()
-        assert(isclose(ro['reserve'], 10000000.0))
+        self.log.info('Test reserve balance')
+        nodes[0].walletsettings('stakelimit', {'height':1})
+        assert(isclose(nodes[0].getwalletinfo()['reserve'], 10000000.0))
 
         ro = nodes[0].reservebalance(True, 100)
         assert(ro['reserve'] == True)
         assert(isclose(ro['amount'], 100.0))
 
-        ro = nodes[0].getwalletinfo()
-        assert(ro['reserve'] == 100)
+        assert(nodes[0].getwalletinfo()['reserve'] == 100)
 
         ro = nodes[0].reservebalance(False)
         assert(ro['reserve'] == False)
         assert(ro['amount'] == 0)
 
-        ro = nodes[0].getwalletinfo()
-        assert(ro['reserve'] == 0)
+        assert(nodes[0].getwalletinfo()['reserve'] == 0)
 
         assert(self.wait_for_height(nodes[0], 1))
-        ro = nodes[0].reservebalance(True, 10000000)
+        nodes[0].reservebalance(True, 10000000)
 
         addrTo = nodes[1].getnewaddress()
         txnHash = nodes[0].sendtoaddress(addrTo, 10)
-        ro = nodes[0].getmempoolentry(txnHash)
-        assert(ro['height'] == 1)
+        assert(nodes[0].getmempoolentry(txnHash)['height'] == 1)
 
         ro = nodes[0].listtransactions()
         fPass = False
@@ -120,14 +114,14 @@ class PosTest(ParticlTestFramework):
                 break
         assert(fFound)
 
-        self.log.info("Test staking pkh256 outputs")
+        self.log.info('Test staking pkh256 outputs')
         nodes[2].walletsettings('stakelimit', {'height':1})
         nodes[2].reservebalance(False)
         assert(nodes[2].getstakinginfo()['weight'] == 400000000000)
 
         self.stakeBlocks(1, nStakeNode=2)
 
-
+        self.log.info('Test rewardaddress')
         addrRewardExt = nodes[0].getnewextaddress()
         ro = nodes[0].walletsettings('stakingoptions', {'rewardaddress':addrRewardExt})
         assert(ro['stakingoptions']['rewardaddress'] == addrRewardExt)
@@ -169,6 +163,16 @@ class PosTest(ParticlTestFramework):
             except:
                 continue
         assert(fFound)
+
+        self.log.info('Test clearing rewardaddress')
+        ro = nodes[0].walletsettings('stakingoptions', {})
+
+        self.stakeBlocks(1)
+        coinstakehash = nodes[0].getblock(nodes[0].getblockhash(7))['tx'][0]
+        ro = nodes[0].getrawtransaction(coinstakehash, True)
+        for output in ro['vout'][1:]:
+            assert(output['type'] == 'standard')
+            assert(output['value'] > 1.0)
 
 
 if __name__ == '__main__':

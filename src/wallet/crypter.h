@@ -5,11 +5,10 @@
 #ifndef BITCOIN_WALLET_CRYPTER_H
 #define BITCOIN_WALLET_CRYPTER_H
 
-#include <keystore.h>
 #include <serialize.h>
 #include <support/allocators/secure.h>
+#include <script/signingprovider.h>
 
-#include <atomic>
 
 const unsigned int WALLET_CRYPTO_KEY_SIZE = 32;
 const unsigned int WALLET_CRYPTO_SALT_SIZE = 8;
@@ -67,9 +66,6 @@ public:
 
 typedef std::vector<unsigned char, secure_allocator<unsigned char> > CKeyingMaterial;
 
-bool EncryptSecret(const CKeyingMaterial& vMasterKey, const CKeyingMaterial &vchPlaintext, const uint256& nIV, std::vector<unsigned char> &vchCiphertext);
-bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCiphertext, const uint256& nIV, CKeyingMaterial& vchPlaintext);
-
 namespace wallet_crypto_tests
 {
     class TestCrypter;
@@ -112,64 +108,8 @@ public:
     }
 };
 
-/** Keystore which keeps the private keys encrypted.
- * It derives from the basic key store, which is used if no encryption is active.
- */
-class CCryptoKeyStore : public CBasicKeyStore
-{
-friend class CHDWallet;
-private:
-
-    CKeyingMaterial vMasterKey GUARDED_BY(cs_KeyStore);
-
-    //! if fUseCrypto is true, mapKeys must be empty
-    //! if fUseCrypto is false, vMasterKey must be empty
-    std::atomic<bool> fUseCrypto;
-
-    //! keeps track of whether Unlock has run a thorough check before
-    bool fDecryptionThoroughlyChecked;
-
-protected:
-    using CryptedKeyMap = std::map<CKeyID, std::pair<CPubKey, std::vector<unsigned char>>>;
-
-    bool SetCrypted();
-
-    //! will encrypt previously unencrypted keys
-    bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
-
-    bool Unlock(const CKeyingMaterial& vMasterKeyIn);
-    CryptedKeyMap mapCryptedKeys GUARDED_BY(cs_KeyStore);
-
-public:
-    CCryptoKeyStore() : fUseCrypto(false), fDecryptionThoroughlyChecked(false)
-    {
-    }
-
-    bool IsCrypted() const { return fUseCrypto; }
-    virtual bool IsLocked() const;
-    virtual bool Lock();
-
-    virtual bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
-    bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey) override;
-    isminetype IsMine(const CKeyID &address) const override;
-    bool HaveKey(const CKeyID &address) const override;
-    bool GetKey(const CKeyID &address, CKey& keyOut) const override;
-    bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const override;
-    std::set<CKeyID> GetKeys() const override;
-
-    virtual size_t CountKeys() const override
-    {
-        if (!IsCrypted())
-            return CBasicKeyStore::CountKeys();
-        LOCK(cs_KeyStore);
-        return mapCryptedKeys.size();
-    };
-
-    /**
-     * Wallet status (encrypted, locked) changed.
-     * Note: Called without locks held.
-     */
-    boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
-};
+bool EncryptSecret(const CKeyingMaterial& vMasterKey, const CKeyingMaterial &vchPlaintext, const uint256& nIV, std::vector<unsigned char> &vchCiphertext);
+bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCiphertext, const uint256& nIV, CKeyingMaterial& vchPlaintext);
+bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key);
 
 #endif // BITCOIN_WALLET_CRYPTER_H

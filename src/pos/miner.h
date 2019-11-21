@@ -1,18 +1,19 @@
-// Copyright (c) 2017 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef PARTICL_POS_MINER_H
 #define PARTICL_POS_MINER_H
 
-#include <primitives/block.h>
 #include <thread>
 #include <condition_variable>
 #include <atomic>
 #include <vector>
+#include <string>
 
 class CHDWallet;
 class CWallet;
+class CBlock;
 
 class StakeThread
 {

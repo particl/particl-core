@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,7 +7,8 @@
 #include <uint256.h>
 #include <chainparams.h>
 #include <util/strencodings.h>
-#include <test/test_bitcoin.h>
+#include <test/util/setup_common.h>
+#include <streams.h>
 
 #include <string>
 #include <boost/test/unit_test.hpp>
@@ -533,16 +534,13 @@ BOOST_AUTO_TEST_CASE(extkey_regtest_keys)
     CExtPubKey ekp;
     assert(true == ek58.GetPubKey(ekp, &Params()));
     unsigned char temp[32];
-    for (uint32_t k = 0; k < 10; ++k)
-    {
+    for (uint32_t k = 0; k < 10; ++k) {
         CPubKey out;
         BOOST_CHECK(true == ekp.pubkey.Derive(out, temp, k, ekp.chaincode));
-
-        CKeyID id = out.GetID();
-
-        if (k == 9)
-            BOOST_CHECK(CBitcoinAddress(id).ToString() == "paKfZFn7TQaZKoY8nnwq5dNxyNG7dkrmpD");
-    };
+        if (k == 9) {
+            BOOST_CHECK(EncodeDestination(PKHash(out)) == "paKfZFn7TQaZKoY8nnwq5dNxyNG7dkrmpD");
+        }
+    }
 
     // Return to mainnet
     SelectParams(CBaseChainParams::MAIN);

@@ -47,11 +47,11 @@
     </message>
     <message>
         <source>Choose the address to send coins to</source>
-        <translation>Choisissez une adresse où envoyer les particl</translation>
+        <translation>Choisissez une adresse où envoyer les particls</translation>
     </message>
     <message>
         <source>Choose the address to receive coins with</source>
-        <translation>Choisissez une adresse où recevoir les particl</translation>
+        <translation>Choisissez une adresse où recevoir les particls</translation>
     </message>
     <message>
         <source>C&amp;hoose</source>
@@ -400,10 +400,6 @@
     <message>
         <source>Sign messages with your Particl addresses to prove you own them</source>
         <translation>Signer vos messages avec vos adresses Particl pour prouver que vous les détenez</translation>
-    </message>
-    <message>
-        <source>Verify messages to ensure they were signed with specified Particl addresses</source>
-        <translation>Vérifier les messages pour s'assurer qu'ils soient signés avec les adresses Particl spécifiées</translation>
     </message>
     <message>
         <source>Verify messages to ensure they were signed with specified Particl addresses</source>

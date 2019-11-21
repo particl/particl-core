@@ -117,28 +117,23 @@ private:
     CTxOutBaseRef &txout;
 
 public:
-
-    CTxOutBaseCompressor(CTxOutBaseRef &txoutIn) : txout(txoutIn) { }
-
+    explicit CTxOutBaseCompressor(CTxOutBaseRef &txoutIn) : txout(txoutIn) { }
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        if (!ser_action.ForRead())
-        {
-            if (txout == nullptr)
-            {
+        if (!ser_action.ForRead()) {
+            if (txout == nullptr) {
                 uint8_t bv = OUTPUT_NULL;
                 READWRITE(bv);
                 return;
-            };
+            }
 
             uint8_t bv = txout->nVersion & 0xFF;
             READWRITE(bv);
 
-            switch (bv)
-            {
+            switch (bv) {
                 case OUTPUT_STANDARD:
                     {
                     CTxOutStandard *p = (CTxOutStandard*)txout.get();
@@ -163,14 +158,12 @@ public:
                     break;
                 default:
                     assert(false);
-            };
-        } else
-        {
+            }
+        } else {
             uint8_t bv;
             READWRITE(bv);
 
-            switch (bv)
-            {
+            switch (bv) {
                 case OUTPUT_NULL:
                     // do nothing
                     return;
@@ -201,11 +194,10 @@ public:
                     break;
                 default:
                     assert(false);
-            };
+            }
             txout->nVersion = bv;
-        };
+        }
     }
-
 };
 
 #endif // BITCOIN_COMPRESSOR_H

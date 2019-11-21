@@ -26,6 +26,7 @@ static const unsigned int DEFAULT_BLOCK_MIN_TX_FEE = 1000;
 static const unsigned int MAX_STANDARD_TX_WEIGHT = 400000;
 /** The minimum non-witness size for transactions we're willing to relay/mine (1 segwit input + 1 P2WPKH output = 82 bytes) */
 static const unsigned int MIN_STANDARD_TX_NONWITNESS_SIZE = 82;
+static const unsigned int MIN_STANDARD_TX_NONWITNESS_SIZE_PART = 81;
 /** Maximum number of signature check operations in an IsStandard() P2SH script */
 static const unsigned int MAX_P2SH_SIGOPS = 15;
 /** The maximum number of sigops we're willing to relay/mine in a single tx */
@@ -36,6 +37,8 @@ static const unsigned int DEFAULT_MAX_MEMPOOL_SIZE = 300;
 static const unsigned int DEFAULT_INCREMENTAL_RELAY_FEE = 1000;
 /** Default for -bytespersigop */
 static const unsigned int DEFAULT_BYTES_PER_SIGOP = 20;
+/** Default for -permitbaremultisig */
+static const bool DEFAULT_PERMIT_BAREMULTISIG = true;
 /** The maximum number of witness stack items in a standard P2WSH script */
 static const unsigned int MAX_STANDARD_P2WSH_STACK_ITEMS = 100;
 /** The maximum size of each witness stack item in a standard P2WSH script */
@@ -83,18 +86,18 @@ bool IsDust(const CTxOut& txout, const CFeeRate& dustRelayFee);
 CAmount GetDustThreshold(const CTxOutStandard *txout, const CFeeRate& dustRelayFeeIn);
 bool IsDust(const CTxOutBase *txout, const CFeeRate& dustRelayFee);
 
-bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType);
+bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType, int64_t time=0);
     /**
      * Check for standard transaction types
      * @return True if all outputs (scriptPubKeys) use only standard transaction forms
      */
-bool IsStandardTx(const CTransaction& tx, std::string& reason);
+bool IsStandardTx(const CTransaction& tx, bool permit_bare_multisig, const CFeeRate& dust_relay_fee, std::string& reason, int64_t time=0);
     /**
      * Check for standard transaction types
      * @param[in] mapInputs    Map of previous transactions that have outputs we're spending
      * @return True if all inputs (scriptSigs) use only standard transaction forms
      */
-bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs);
+bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs, int64_t time=0);
     /**
      * Check if the transaction is over standard P2WSH resources limit:
      * 3600bytes witnessScript size, 80bytes per witness stack element, 100 witness stack elements
@@ -102,13 +105,19 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
      */
 bool IsWitnessStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs);
 
-extern CFeeRate incrementalRelayFee;
-extern CFeeRate dustRelayFee;
-extern unsigned int nBytesPerSigOp;
-
 /** Compute the virtual transaction size (weight reinterpreted as bytes). */
-int64_t GetVirtualTransactionSize(int64_t nWeight, int64_t nSigOpCost);
-int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCost = 0);
-int64_t GetVirtualTransactionInputSize(const CTxIn& tx, int64_t nSigOpCost = 0);
+int64_t GetVirtualTransactionSize(int64_t nWeight, int64_t nSigOpCost, unsigned int bytes_per_sigop);
+int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCost, unsigned int bytes_per_sigop);
+int64_t GetVirtualTransactionInputSize(const CTxIn& tx, int64_t nSigOpCost, unsigned int bytes_per_sigop);
+
+static inline int64_t GetVirtualTransactionSize(const CTransaction& tx)
+{
+    return GetVirtualTransactionSize(tx, 0, 0);
+}
+
+static inline int64_t GetVirtualTransactionInputSize(const CTxIn& tx)
+{
+    return GetVirtualTransactionInputSize(tx, 0, 0);
+}
 
 #endif // BITCOIN_POLICY_POLICY_H

@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from .test_framework import BitcoinTestFramework
-from .util import *
-
+import time
+import json
 import decimal
 
-def jsonDecimal(obj):
-    if isinstance(obj, decimal.Decimal):
-        return str(obj)
-    raise TypeError
+from .test_framework import BitcoinTestFramework
+from .util import assert_equal, coverage, connect_nodes
+
 
 def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
     a = decimal.Decimal(a)
     b = decimal.Decimal(b)
     return abs(a-b) <= max(decimal.Decimal(rel_tol) * decimal.Decimal(max(abs(a), abs(b))), abs_tol)
+
+def connect_nodes_bi(nodes, a, b):
+    connect_nodes(nodes[a], b)
+    connect_nodes(nodes[b], a)
 
 def getIndexAtProperty(arr, name, value):
     for i, o in enumerate(arr):
@@ -26,6 +28,7 @@ def getIndexAtProperty(arr, name, value):
         except:
             continue
     return -1
+
 
 class ParticlTestFramework(BitcoinTestFramework):
     def start_node(self, i, *args, **kwargs):
@@ -66,7 +69,7 @@ class ParticlTestFramework(BitcoinTestFramework):
             try:
                 ro = node.getmempoolentry(txnHash)
 
-                if ro['size'] >= 100 and ro['height'] >= 0:
+                if ro['vsize'] >= 100 and ro['height'] >= 0:
                     return True
             except:
                 continue
@@ -103,15 +106,18 @@ class ParticlTestFramework(BitcoinTestFramework):
         self.sync_all()
         assert(self.nodes[nSyncCheckNode].getblockcount() == height)
 
-    def stakeBlocks(self, nBlocks, nStakeNode=0):
+    def stakeBlocks(self, nBlocks, nStakeNode=0, fSync=True):
         height = self.nodes[nStakeNode].getblockcount()
 
-        self.stakeToHeight(height + nBlocks, nStakeNode=nStakeNode)
+        self.stakeToHeight(height + nBlocks, fSync=fSync, nStakeNode=nStakeNode)
 
     def jsonDecimal(self, obj):
         if isinstance(obj, decimal.Decimal):
             return str(obj)
         raise TypeError
+
+    def dumpj(self, obj):
+        return json.dumps(obj, indent=4, default=self.jsonDecimal)
 
     def set_test_params(self):
         """Tests must this method to change default values for number of nodes, topology, etc"""

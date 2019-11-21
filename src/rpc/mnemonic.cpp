@@ -1,14 +1,12 @@
 // Copyright (c) 2015 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <rpc/server.h>
 
-#include <util/system.h>
 #include <util/strencodings.h>
 #include <rpc/util.h>
-#include <key.h>
 #include <key_io.h>
 #include <key/extkey.h>
 #include <random.h>
@@ -34,7 +32,7 @@ int GetLanguageOffset(std::string sIn)
         break;
     }
 
-    if (nLanguage < 1 || nLanguage >= WLL_MAX) {
+    if (nLanguage < 1 || nLanguage >= WLL_MAX || !MnemonicHaveLanguage(nLanguage)) {
         throw std::runtime_error("Unknown language.");
     }
 
@@ -43,12 +41,23 @@ int GetLanguageOffset(std::string sIn)
 
 UniValue mnemonic(const JSONRPCRequest &request)
 {
+    std::string enabled_languages;
+    for (size_t k = 1; k < WLL_MAX; ++k) {
+        if (!MnemonicHaveLanguage(k)) {
+            continue;
+        }
+        if (enabled_languages.size()) {
+            enabled_languages += "|";
+        }
+        enabled_languages += mnLanguagesTag[k];
+    }
+
     std::string help = ""
         "mnemonic new|decode|addchecksum|dumpwords|listlanguages\n"
         "mnemonic new ( \"password\" language nBytesEntropy bip44 )\n"
         "    Generate a new extended key and mnemonic\n"
         "    password, can be blank "", default blank\n"
-        "    language, english|french|japanese|spanish|chinese_s|chinese_t|italian|korean, default english\n"
+        "    language, " + enabled_languages + ", default english\n"
         "    nBytesEntropy, 16 -> 64, default 32\n"
         "    bip44, true|false, default true\n"
         "mnemonic decode \"password\" \"mnemonic\" ( bip44 )\n"
@@ -96,7 +105,6 @@ UniValue mnemonic(const JSONRPCRequest &request)
         if (request.params.size() > 1) {
             sPassword = request.params[1].get_str();
         }
-
         if (request.params.size() > 2) {
             nLanguage = GetLanguageOffset(request.params[2].get_str());
         }
@@ -108,7 +116,6 @@ UniValue mnemonic(const JSONRPCRequest &request)
             if (!sstr) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid num bytes entropy");
             }
-
             if (nBytesEntropy < 16 || nBytesEntropy > 64) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Num bytes entropy out of range [16,64].");
             }
@@ -132,13 +139,11 @@ UniValue mnemonic(const JSONRPCRequest &request)
             if (0 != MnemonicEncode(nLanguage, vEntropy, sMnemonic, sError)) {
                 throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("MnemonicEncode failed %s.", sError.c_str()).c_str());
             }
-
             if (0 != MnemonicToSeed(sMnemonic, sPassword, vSeed)) {
                 throw JSONRPCError(RPC_INTERNAL_ERROR, "MnemonicToSeed failed.");
             }
 
             ekMaster.SetSeed(&vSeed[0], vSeed.size());
-
             if (!ekMaster.IsValid()) {
                 continue;
             }
@@ -149,13 +154,13 @@ UniValue mnemonic(const JSONRPCRequest &request)
         result.pushKV("mnemonic", sMnemonic);
 
         if (fBip44) {
-            eKey58.SetKey(ekMaster, CChainParams::EXT_SECRET_KEY_BTC);
+            eKey58.SetKey(CExtKeyPair(ekMaster), CChainParams::EXT_SECRET_KEY_BTC);
             result.pushKV("master", eKey58.ToString());
 
             // m / purpose' / coin_type' / account' / change / address_index
             // path "44' Params().BIP44ID()
         } else {
-            eKey58.SetKey(ekMaster, CChainParams::EXT_SECRET_KEY);
+            eKey58.SetKey(CExtKeyPair(ekMaster), CChainParams::EXT_SECRET_KEY);
             result.pushKV("master", eKey58.ToString());
         }
 
@@ -175,7 +180,6 @@ UniValue mnemonic(const JSONRPCRequest &request)
         } else {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Must specify password.");
         }
-
         if (request.params.size() > 2) {
             sMnemonic = request.params[2].get_str();
         } else {
@@ -187,7 +191,6 @@ UniValue mnemonic(const JSONRPCRequest &request)
         if (request.params.size() > 4) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Too many parameters");
         }
-
         if (sMnemonic.empty()) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Mnemonic can't be blank.");
         }
@@ -198,7 +201,6 @@ UniValue mnemonic(const JSONRPCRequest &request)
         if (0 != MnemonicDecode(nLanguage, sMnemonic, vEntropy, sError)) {
             throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("MnemonicDecode failed %s.", sError.c_str()).c_str());
         }
-
         if (0 != MnemonicToSeed(sMnemonic, sPassword, vSeed)) {
             throw JSONRPCError(RPC_INTERNAL_ERROR, "MnemonicToSeed failed.");
         }
@@ -212,7 +214,7 @@ UniValue mnemonic(const JSONRPCRequest &request)
         }
 
         if (fBip44) {
-            eKey58.SetKey(ekMaster, CChainParams::EXT_SECRET_KEY_BTC);
+            eKey58.SetKey(CExtKeyPair(ekMaster), CChainParams::EXT_SECRET_KEY_BTC);
             result.pushKV("master", eKey58.ToString());
 
             // m / purpose' / coin_type' / account' / change / address_index
@@ -220,10 +222,10 @@ UniValue mnemonic(const JSONRPCRequest &request)
             ekMaster.Derive(ekDerived, BIP44_PURPOSE);
             ekDerived.Derive(ekDerived, Params().BIP44ID());
 
-            eKey58.SetKey(ekDerived, CChainParams::EXT_SECRET_KEY);
+            eKey58.SetKey(CExtKeyPair(ekDerived), CChainParams::EXT_SECRET_KEY);
             result.pushKV("derived", eKey58.ToString());
         } else {
-            eKey58.SetKey(ekMaster, CChainParams::EXT_SECRET_KEY);
+            eKey58.SetKey(CExtKeyPair(ekMaster), CChainParams::EXT_SECRET_KEY);
             result.pushKV("master", eKey58.ToString());
         }
 
@@ -260,17 +262,19 @@ UniValue mnemonic(const JSONRPCRequest &request)
         UniValue arrayWords(UniValue::VARR);
 
         std::string sWord, sError;
-        while (0 == MnemonicGetWord(nLanguage, nWords, sWord, sError))
-        {
+        while (0 == MnemonicGetWord(nLanguage, nWords, sWord, sError)) {
             arrayWords.push_back(sWord);
             nWords++;
-        };
+        }
 
         result.pushKV("words", arrayWords);
         result.pushKV("num_words", nWords);
     } else
     if (mode == "listlanguages") {
         for (size_t k = 1; k < WLL_MAX; ++k) {
+            if (!MnemonicHaveLanguage(k)) {
+                continue;
+            }
             std::string sName(mnLanguagesTag[k]);
             std::string sDesc(mnLanguagesDesc[k]);
             result.pushKV(sName, sDesc);

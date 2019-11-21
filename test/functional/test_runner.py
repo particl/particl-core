@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2018 The Bitcoin Core developers
+# Copyright (c) 2014-2019 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Run regression test suite.
 
 This module calls down into individual test cases via subprocess. It will
 forward all unrecognized arguments onto the individual test scripts.
-
-Functional tests are disabled on Windows by default. Use --force to run them anyway.
 
 For a description of arguments recognized by test scripts, see
 `test/functional/test_framework/test_framework.py:BitcoinTestFramework.main`.
@@ -68,10 +66,20 @@ if os.name != 'nt' or sys.getwindowsversion() >= (10, 0, 14393):
 TEST_EXIT_PASSED = 0
 TEST_EXIT_SKIPPED = 77
 
-BASE_SCRIPTS = [
-    # Scripts that are run by the travis build process.
+EXTENDED_SCRIPTS = [
+    # These tests are not run by default.
     # Longest test should go first, to favor running tests in parallel
-    'feature_fee_estimation.py',
+    'feature_pruning.py',
+    'feature_dbcrash.py',
+
+    'wallet_part_unloadspent.py',
+    'p2p_part_dos.py',
+    'feature_part_smsgpaidfee_ext.py',
+]
+
+BASE_SCRIPTS = [
+    # Scripts that are run by default.
+    # Longest test should go first, to favor running tests in parallel
     'wallet_hd.py',
     'wallet_backup.py',
     # vv Tests less than 5m vv
@@ -86,6 +94,7 @@ BASE_SCRIPTS = [
     'wallet_labels.py',
     'p2p_segwit.py',
     'p2p_timeouts.py',
+    'p2p_tx_download.py',
     'wallet_dump.py',
     'wallet_listtransactions.py',
     # vv Tests less than 60s vv
@@ -102,23 +111,31 @@ BASE_SCRIPTS = [
     'feature_bip68_sequence.py',
     'p2p_feefilter.py',
     'feature_reindex.py',
+    'feature_abortnode.py',
     # vv Tests less than 30s vv
     'wallet_keypool_topup.py',
+    'feature_fee_estimation.py',
     'interface_zmq.py',
     'interface_bitcoin_cli.py',
     'mempool_resurrect.py',
     'wallet_txn_doublespend.py --mineblock',
+    'tool_wallet.py',
     'wallet_txn_clone.py',
     'wallet_txn_clone.py --segwit',
     'rpc_getchaintips.py',
+    'rpc_misc.py',
     'interface_rest.py',
     'mempool_spend_coinbase.py',
+    'wallet_avoidreuse.py',
     'mempool_reorg.py',
     'mempool_persist.py',
     'wallet_multiwallet.py',
     'wallet_multiwallet.py --usecli',
-    'wallet_disableprivatekeys.py',
-    'wallet_disableprivatekeys.py --usecli',
+    'wallet_createwallet.py',
+    'wallet_createwallet.py --usecli',
+    'wallet_watchonly.py',
+    'wallet_watchonly.py --usecli',
+    'wallet_reorgsrestore.py',
     'interface_http.py',
     'interface_rpc.py',
     'rpc_psbt.py',
@@ -134,6 +151,8 @@ BASE_SCRIPTS = [
     'rpc_net.py',
     'wallet_keypool.py',
     'p2p_mempool.py',
+    'rpc_setban.py',
+    'p2p_blocksonly.py',
     'mining_prioritisetransaction.py',
     'p2p_invalid_locator.py',
     'p2p_invalid_block.py',
@@ -144,9 +163,11 @@ BASE_SCRIPTS = [
     'wallet_txn_doublespend.py',
     'wallet_txn_clone.py --mineblock',
     'feature_notifications.py',
+    'rpc_getblockfilter.py',
     'rpc_invalidateblock.py',
     'feature_rbf.py',
     'mempool_packages.py',
+    'mempool_package_onemore.py',
     'rpc_createmultisig.py',
     'feature_versionbits_warning.py',
     'rpc_preciousblock.py',
@@ -163,6 +184,8 @@ BASE_SCRIPTS = [
     'rpc_bind.py --nonloopback',
     'mining_basic.py',
     'wallet_bumpfee.py',
+    'wallet_bumpfee_totalfee_deprecation.py',
+    'wallet_implicitsegwit.py',
     'rpc_named_arguments.py',
     'wallet_listsinceblock.py',
     'p2p_leak.py',
@@ -172,32 +195,31 @@ BASE_SCRIPTS = [
     'rpc_uptime.py',
     'wallet_resendwallettransactions.py',
     'wallet_fallbackfee.py',
+    'rpc_dumptxoutset.py',
     'feature_minchainwork.py',
     'rpc_getblockstats.py',
+    'wallet_create_tx.py',
     'p2p_fingerprint.py',
     'feature_uacomment.py',
+    'wallet_coinbase_category.py',
     'feature_filelock.py',
+    'feature_loadblock.py',
+    'p2p_dos_header_tree.py',
     'p2p_unrequested_blocks.py',
     'feature_includeconf.py',
+    'rpc_deriveaddresses.py',
+    'rpc_deriveaddresses.py --usecli',
     'rpc_scantxoutset.py',
     'feature_logging.py',
     'p2p_node_network_limited.py',
+    'p2p_permissions.py',
     'feature_blocksdir.py',
     'feature_config_args.py',
     'rpc_help.py',
     'feature_help.py',
+    'feature_shutdown.py',
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time
-]
-
-EXTENDED_SCRIPTS = [
-    # These tests are not run by the travis build process.
-    # Longest test should go first, to favor running tests in parallel
-    'feature_pruning.py',
-    'feature_dbcrash.py',
-
-    'wallet_part_unloadspent.py',
-    'p2p_part_dos.py',
 ]
 
 PARTICL_SCRIPTS = [
@@ -211,7 +233,9 @@ PARTICL_SCRIPTS = [
     'rpc_part_mnemonic.py',
     'feature_part_smsg.py',
     'feature_part_smsgpaid.py',
+    'feature_part_smsgpaidfee.py',
     'wallet_part_multisig.py',
+    'wallet_part_multiwallet.py',
     'feature_part_coldstaking.py',
     'rpc_part_filtertransactions.py',
     'feature_part_vote.py',
@@ -220,6 +244,13 @@ PARTICL_SCRIPTS = [
     'feature_part_usbdevice.py',
     'wallet_part_watchonly.py',
     'rpc_part_atomicswap.py',
+    'rpc_part_signmessage.py',
+    'wallet_part_avoidreuse.py',
+    'wallet_part_segwit_scripts.py',
+]
+
+PARTICL_SCRIPTS_EXT = [
+    'feature_part_smsg_multiwallet.py',
 ]
 
 INSIGHT_SCRIPTS = [
@@ -231,7 +262,7 @@ INSIGHT_SCRIPTS = [
 ]
 
 # Place EXTENDED_SCRIPTS first since it has the 3 longest running tests
-ALL_SCRIPTS = EXTENDED_SCRIPTS + BASE_SCRIPTS + PARTICL_SCRIPTS + INSIGHT_SCRIPTS
+ALL_SCRIPTS = EXTENDED_SCRIPTS + BASE_SCRIPTS + PARTICL_SCRIPTS + INSIGHT_SCRIPTS + PARTICL_SCRIPTS_EXT
 
 NON_SCRIPTS = [
     # These are python files that live in the functional tests directory, but are not test scripts.
@@ -250,6 +281,7 @@ def main():
                                      epilog='''
     Help text and arguments for individual test script:''',
                                      formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--ansi', action='store_true', default=sys.stdout.isatty(), help="Use ANSI colors and dots in output (enabled by default when standard output is a TTY)")
     parser.add_argument('--combinedlogslen', '-c', type=int, default=0, metavar='n', help='On failure, print a log (of length n lines) to the console, combined from the test framework and all test nodes.')
     parser.add_argument('--coverage', action='store_true', help='generate a basic coverage report for the RPC interface')
     parser.add_argument('--ci', action='store_true', help='Run checks and code that are usually only enabled in a continuous integration environment')
@@ -257,17 +289,25 @@ def main():
     parser.add_argument('--extended', action='store_true', help='run the extended test suite in addition to the basic tests')
     parser.add_argument('--bitcoin', action='store_true', help='run Bitcoin specific tests')
     parser.add_argument('--particl', action='store_true', help='run Particl specific tests')
+    parser.add_argument('--particlext', action='store_true', help='run Particl extended tests')
     parser.add_argument('--insight', action='store_true', help='run Insight specific tests')
     parser.add_argument('--withstdout', action='store_true', help='print stdout when test passed also')
-    parser.add_argument('--force', '-f', action='store_true', help='run tests even on platforms where they are disabled by default (e.g. windows).')
     parser.add_argument('--help', '-h', '-?', action='store_true', help='print help text and exit')
     parser.add_argument('--jobs', '-j', type=int, default=4, help='how many test scripts to run in parallel. Default=4.')
     parser.add_argument('--keepcache', '-k', action='store_true', help='the default behavior is to flush the cache directory on startup. --keepcache retains the cache from the previous testrun.')
     parser.add_argument('--quiet', '-q', action='store_true', help='only print dots, results summary and failure logs')
     parser.add_argument('--tmpdirprefix', '-t', default=tempfile.gettempdir(), help="Root directory for datadirs")
     parser.add_argument('--failfast', action='store_true', help='stop execution after the first test failure')
+    parser.add_argument('--filter', help='filter scripts to run by regular expression')
+
     args, unknown_args = parser.parse_known_args()
     gArgs = args
+    if not args.ansi:
+        global BOLD, GREEN, RED, GREY
+        BOLD = ("", "")
+        GREEN = ("", "")
+        RED = ("", "")
+        GREY = ("", "")
 
     # args to be passed on always start with two dashes; tests are the remaining unknown args
     tests = [arg for arg in unknown_args if arg[:2] != "--"]
@@ -285,23 +325,13 @@ def main():
     logging.basicConfig(format='%(message)s', level=logging_level)
 
     # Create base test directory
-    tmpdir = "%s/particl_test_runner_₿_🏃_%s" % (args.tmpdirprefix, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-
-    # If we fixed the command-line and filename encoding issue on Windows, these two lines could be removed
-    if config["environment"]["EXEEXT"] == ".exe":
-        tmpdir = "%s/particl_test_runner_%s" % (args.tmpdirprefix, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    tmpdir = "%s/particl_test_runner_P_🏃_%s" % (args.tmpdirprefix, datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
 
     os.makedirs(tmpdir)
 
     logging.debug("Temporary test directory at %s" % tmpdir)
 
     enable_bitcoind = config["components"].getboolean("ENABLE_BITCOIND")
-
-    if config["environment"]["EXEEXT"] == ".exe" and not args.force:
-        # https://github.com/bitcoin/bitcoin/commit/d52802551752140cf41f0d9a225a43e84404d3e9
-        # https://github.com/bitcoin/bitcoin/pull/5677#issuecomment-136646964
-        print("Tests currently disabled on Windows by default. Use --force option to enable")
-        sys.exit(0)
 
     if not enable_bitcoind:
         print("No functional tests to run.")
@@ -312,11 +342,22 @@ def main():
     test_list = []
     if tests:
         # Individual tests have been specified. Run specified tests that exist
-        # in the ALL_SCRIPTS list. Accept the name with or without .py extension.
-        tests = [re.sub("\.py$", "", test) + ".py" for test in tests]
+        # in the ALL_SCRIPTS list. Accept names with or without a .py extension.
+        # Specified tests can contain wildcards, but in that case the supplied
+        # paths should be coherent, e.g. the same path as that provided to call
+        # test_runner.py. Examples:
+        #   `test/functional/test_runner.py test/functional/wallet*`
+        #   `test/functional/test_runner.py ./test/functional/wallet*`
+        #   `test_runner.py wallet*`
+        #   but not:
+        #   `test/functional/test_runner.py wallet*`
+        # Multiple wildcards can be passed:
+        #   `test_runner.py tool* mempool*`
         for test in tests:
-            if test in ALL_SCRIPTS:
-                test_list.append(test)
+            script = test.split("/")[-1]
+            script = script + ".py" if ".py" not in script else script
+            if script in ALL_SCRIPTS:
+                test_list.append(script)
             else:
                 print("{}WARNING!{} Test '{}' not found in full test list.".format(BOLD[1], BOLD[0], test))
     #elif args.extended:
@@ -334,6 +375,8 @@ def main():
             test_list += INSIGHT_SCRIPTS
         if args.bitcoin:
             test_list += BASE_SCRIPTS
+        if args.particlext:
+            test_list += PARTICL_SCRIPTS_EXT
 
     # Remove the test cases that the user has explicitly asked to exclude.
     if args.exclude:
@@ -345,6 +388,9 @@ def main():
                 test_list.remove(exclude_item)
             if not exclude_list:
                 print("{}WARNING!{} Test '{}' not found in current test list.".format(BOLD[1], BOLD[0], exclude_test))
+
+    if args.filter:
+        test_list = list(filter(re.compile(args.filter).search, test_list))
 
     if not test_list:
         print("No valid test scripts specified. Check that your test is in one "
@@ -374,15 +420,17 @@ def main():
         combined_logs_len=args.combinedlogslen,
         failfast=args.failfast,
         runs_ci=args.ci,
+        use_term_control=args.ansi,
         create_cache=(True if args.bitcoin or (not args.particl and not args.insight) else False)
     )
 
-def run_tests(test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=[], combined_logs_len=0, failfast=False, runs_ci=False, create_cache=True):
+def run_tests(*, test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=False, args=None, combined_logs_len=0, failfast=False, runs_ci, use_term_control, create_cache=True):
     args = args or []
 
-    # Warn if bitcoind is already running (unix only)
+    # Warn if bitcoind is already running
+    # pidof might fail or return an empty string if bitcoind is not running
     try:
-        if subprocess.check_output(["pidof", "particld"]) is not None:
+        if subprocess.check_output(["pidof", "particld"]) not in [b'']:
             print("%sWARNING!%s There is already a particld process running on this system. Tests may fail unexpectedly due to resource contention!" % (BOLD[1], BOLD[0]))
     except (OSError, subprocess.SubprocessError):
         pass
@@ -419,6 +467,7 @@ def run_tests(test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=Fal
         test_list=test_list,
         flags=flags,
         timeout_duration=40 * 60 if runs_ci else float('inf'),  # in seconds
+        use_term_control=use_term_control,
     )
     start_time = time.time()
     test_results = []
@@ -460,16 +509,18 @@ def run_tests(test_list, src_dir, build_dir, tmpdir, jobs=1, enable_coverage=Fal
     print_results(test_results, max_len_name, (int(time.time() - start_time)))
 
     if coverage:
-        coverage.report_rpc_coverage()
+        coverage_passed = coverage.report_rpc_coverage()
 
         logging.debug("Cleaning up coverage data")
         coverage.cleanup()
+    else:
+        coverage_passed = True
 
     # Clear up the temp directory if all subdirectories are gone
     if not os.listdir(tmpdir):
         os.rmdir(tmpdir)
 
-    all_passed = all(map(lambda test_result: test_result.was_successful, test_results))
+    all_passed = all(map(lambda test_result: test_result.was_successful, test_results)) and coverage_passed
 
     # This will be a no-op unless failfast is True in which case there may be dangling
     # processes which need to be killed.
@@ -504,7 +555,7 @@ class TestHandler:
     Trigger the test scripts passed in via the list.
     """
 
-    def __init__(self, *, num_tests_parallel, tests_dir, tmpdir, test_list, flags, timeout_duration):
+    def __init__(self, *, num_tests_parallel, tests_dir, tmpdir, test_list, flags, timeout_duration, use_term_control):
         assert num_tests_parallel >= 1
         self.num_jobs = num_tests_parallel
         self.tests_dir = tests_dir
@@ -514,6 +565,7 @@ class TestHandler:
         self.flags = flags
         self.num_running = 0
         self.jobs = []
+        self.use_term_control = use_term_control
 
     def get_next(self):
         while self.num_running < self.num_jobs and self.test_list:
@@ -538,6 +590,11 @@ class TestHandler:
                               log_stderr))
         if not self.jobs:
             raise IndexError('pop from empty list')
+
+        # Print remaining running jobs when all jobs have been started.
+        if not self.test_list:
+            print("Remaining jobs: [{}]".format(", ".join(j[0] for j in self.jobs)))
+
         dot_count = 0
         while True:
             # Return first proc that finishes
@@ -545,7 +602,8 @@ class TestHandler:
             for job in self.jobs:
                 (name, start_time, proc, testdir, log_out, log_err) = job
                 if int(time.time() - start_time) > self.timeout_duration:
-                    # In travis, timeout individual tests (to stop tests hanging and not providing useful output).
+                    # Timeout individual tests if timeout is specified (to stop
+                    # tests hanging and not providing useful output).
                     proc.send_signal(signal.SIGINT)
                 if proc.poll() is not None:
                     log_out.seek(0), log_err.seek(0)
@@ -559,11 +617,13 @@ class TestHandler:
                         status = "Failed"
                     self.num_running -= 1
                     self.jobs.remove(job)
-                    clearline = '\r' + (' ' * dot_count) + '\r'
-                    print(clearline, end='', flush=True)
+                    if self.use_term_control:
+                        clearline = '\r' + (' ' * dot_count) + '\r'
+                        print(clearline, end='', flush=True)
                     dot_count = 0
                     return TestResult(name, status, int(time.time() - start_time)), testdir, stdout, stderr
-            print('.', end='', flush=True)
+            if self.use_term_control:
+                print('.', end='', flush=True)
             dot_count += 1
 
     def kill_and_join(self):
@@ -613,7 +673,7 @@ class TestResult():
 def check_script_prefixes():
     """Check that test scripts start with one of the allowed name prefixes."""
 
-    good_prefixes_re = re.compile("(example|feature|interface|mempool|mining|p2p|rpc|wallet)_")
+    good_prefixes_re = re.compile("(example|feature|interface|mempool|mining|p2p|rpc|wallet|tool)_")
     bad_script_names = [script for script in ALL_SCRIPTS if good_prefixes_re.match(script) is None]
 
     if bad_script_names:
@@ -633,9 +693,8 @@ def check_script_list(*, src_dir, fail_on_warn):
     if len(missed_tests) != 0:
         print("%sWARNING!%s The following scripts are not being run: %s. Check the test lists in test_runner.py." % (BOLD[1], BOLD[0], str(missed_tests)))
         if fail_on_warn:
-            # On travis this warning is an error to prevent merging incomplete commits into master
-            pass
-            #sys.exit(1)
+            # On CI this warning is an error to prevent merging incomplete commits into master
+            sys.exit(1)
 
 
 class RPCCoverage():
@@ -667,8 +726,10 @@ class RPCCoverage():
         if uncovered:
             print("Uncovered RPC commands:")
             print("".join(("  - %s\n" % command) for command in sorted(uncovered)))
+            return False
         else:
             print("All RPC commands covered.")
+            return True
 
     def cleanup(self):
         return shutil.rmtree(self.dir)

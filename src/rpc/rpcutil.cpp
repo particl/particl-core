@@ -97,16 +97,11 @@ void AddUri(JSONRPCRequest &request, std::string wallet)
 
 void CallRPC(UniValue &rv, const JSONRPCRequest &request)
 {
-    const CRPCCommand *cmd = tableRPC[request.strMethod];
-
-    if (!cmd)
-        throw std::runtime_error(strprintf("CallRPC Unknown command, %s.", request.strMethod));
-    rpcfn_type method = tableRPC[request.strMethod]->actor;
+    if (RPCIsInWarmup(nullptr)) SetRPCWarmupFinished();
     try {
-        rv = (*method)(request);
+        rv= tableRPC.execute(request);
     }
     catch (const UniValue& objError) {
         throw std::runtime_error(find_value(objError, "message").get_str());
     }
-    return;
 }

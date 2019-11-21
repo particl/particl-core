@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018 The Particl Core developers
+# Copyright (c) 2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.util import *
+import json
+
+from test_framework.test_particl import ParticlTestFramework, connect_nodes_bi
+from test_framework.authproxy import JSONRPCException
 
 
 class TxIndexTest(ParticlTestFramework):
@@ -12,9 +14,9 @@ class TxIndexTest(ParticlTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 3
         self.extra_args = [
-            ['-debug',],
-            ['-debug','-csindex'],
-            ['-debug','-csindex'],]
+            ['-debug', ],
+            ['-debug', '-csindex'],
+            ['-debug', '-csindex'], ]
 
     def skip_test_if_missing_module(self):
         self.skip_if_no_wallet()
@@ -23,8 +25,8 @@ class TxIndexTest(ParticlTestFramework):
         self.add_nodes(self.num_nodes, extra_args=self.extra_args)
         self.start_nodes()
 
-        connect_nodes(self.nodes[0], 1)
-        connect_nodes(self.nodes[0], 2)
+        connect_nodes_bi(self.nodes, 0, 1)
+        connect_nodes_bi(self.nodes, 0, 2)
 
         self.sync_all()
 
@@ -44,14 +46,18 @@ class TxIndexTest(ParticlTestFramework):
 
         nodes[2].extkeyimportmaster(nodes[2].mnemonic('new')['master'])
 
+        r = nodes[1].getindexinfo()
+        assert(r['txindex'] is True)
+        assert(r['coldstakeindex'] is True)
+
         addrStake = nodes[2].getnewaddress('addrStake')
         addrSpend = nodes[2].getnewaddress('addrSpend', 'false', 'false', 'true')
 
         addrStake2 = nodes[2].getnewaddress('addrStake2')
         addrSpend2 = nodes[2].getnewaddress('addrSpend2', 'false', 'false', 'true')
 
-        for i in range(len(nodes)):
-            nodes[i].setmocktime(1530566486, True)  # Clamp for more consistent runtime
+        #for i in range(len(nodes)):
+        #   nodes[i].setmocktime(1530566486, True)  # Clamp for more consistent runtime
 
         self.stakeBlocks(1)
 

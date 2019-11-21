@@ -6,12 +6,13 @@
 #include <shutdown.h>
 #include <ui_interface.h>
 #include <util/system.h>
+#include <util/translation.h>
 #include <validation.h>
 
 #include <insight/csindex.h>
 #include <script/script.h>
 #include <script/interpreter.h>
-#include <script/ismine.h>
+#include <wallet/ismine.h>
 #include <key_io.h>
 
 #include <boost/thread.hpp>
@@ -25,7 +26,7 @@ constexpr char DB_TXINDEX_BLOCK = 'T';
 
 std::unique_ptr<TxIndex> g_txindex;
 
-struct CDiskTxPos : public CDiskBlockPos
+struct CDiskTxPos : public FlatFilePos
 {
     unsigned int nTxOffset; // after header
 
@@ -33,11 +34,11 @@ struct CDiskTxPos : public CDiskBlockPos
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITEAS(CDiskBlockPos, *this);
+        READWRITEAS(FlatFilePos, *this);
         READWRITE(VARINT(nTxOffset));
     }
 
-    CDiskTxPos(const CDiskBlockPos &blockIn, unsigned int nTxOffsetIn) : CDiskBlockPos(blockIn.nFile, blockIn.nPos), nTxOffset(nTxOffsetIn) {
+    CDiskTxPos(const FlatFilePos &blockIn, unsigned int nTxOffsetIn) : FlatFilePos(blockIn.nFile, blockIn.nPos), nTxOffset(nTxOffsetIn) {
     }
 
     CDiskTxPos() {
@@ -45,7 +46,7 @@ struct CDiskTxPos : public CDiskBlockPos
     }
 
     void SetNull() {
-        CDiskBlockPos::SetNull();
+        FlatFilePos::SetNull();
         nTxOffset = 0;
     }
 };
@@ -146,7 +147,7 @@ bool TxIndex::DB::MigrateData(CBlockTreeDB& block_tree_db, const CBlockLocator& 
 
     int64_t count = 0;
     LogPrintf("Upgrading txindex database... [0%%]\n");
-    uiInterface.ShowProgress(_("Upgrading txindex database"), 0, true);
+    uiInterface.ShowProgress(_("Upgrading txindex database").translated, 0, true);
     int report_done = 0;
     const size_t batch_size = 1 << 24; // 16 MiB
 
@@ -183,7 +184,7 @@ bool TxIndex::DB::MigrateData(CBlockTreeDB& block_tree_db, const CBlockLocator& 
                 (static_cast<uint32_t>(*(txid.begin() + 1)) << 0);
             int percentage_done = (int)(high_nibble * 100.0 / 65536.0 + 0.5);
 
-            uiInterface.ShowProgress(_("Upgrading txindex database"), percentage_done, true);
+            uiInterface.ShowProgress(_("Upgrading txindex database").translated, percentage_done, true);
             if (report_done < percentage_done/10) {
                 LogPrintf("Upgrading txindex database... [%d%%]\n", percentage_done);
                 report_done = percentage_done/10;
@@ -245,7 +246,7 @@ bool TxIndex::Init()
     // Attempt to migrate txindex from the old database to the new one. Even if
     // chain_tip is null, the node could be reindexing and we still want to
     // delete txindex records in the old database.
-    if (!m_db->MigrateData(*pblocktree, chainActive.GetLocator())) {
+    if (!m_db->MigrateData(*pblocktree, ::ChainActive().GetLocator())) {
         return false;
     }
 
@@ -259,9 +260,9 @@ bool TxIndex::Init()
         if (!GetDB().Read(DB_TXINDEX_CSBESTBLOCK, locator)) {
             locator.SetNull();
         }
-        CBlockIndex *best_cs_block_index = FindForkInGlobalIndex(chainActive, locator);
+        CBlockIndex *best_cs_block_index = FindForkInGlobalIndex(::ChainActive(), locator);
 
-        if (best_cs_block_index != chainActive.Tip()) {
+        if (best_cs_block_index != ::ChainActive().Tip()) {
             m_synced = false;
             if (m_best_block_index.load()->nHeight > best_cs_block_index->nHeight) {
                 LogPrintf("Setting txindex best block back to %d to sync csindex.\n", best_cs_block_index->nHeight);
@@ -278,6 +279,9 @@ bool TxIndex::WriteBlock(const CBlock& block, const CBlockIndex* pindex)
     if (m_cs_index) {
         IndexCSOutputs(block, pindex);
     }
+    // Exclude genesis block transaction because outputs are not spendable.
+    if (!block.IsParticlVersion() && pindex->nHeight == 0) return true;
+
     CDiskTxPos pos(pindex->GetBlockPos(), GetSizeOfCompactSize(block.vtx.size()));
     std::vector<std::pair<uint256, CDiskTxPos>> vPos;
     vPos.reserve(block.vtx.size());
@@ -432,7 +436,7 @@ bool TxIndex::IndexCSOutputs(const CBlock& block, const CBlockIndex* pindex)
         batch.Write(std::make_pair(DB_TXINDEX_CSLINK, it.first), it.second);
     }
 
-    batch.Write(DB_TXINDEX_CSBESTBLOCK, chainActive.GetLocator(pindex));
+    batch.Write(DB_TXINDEX_CSBESTBLOCK, ::ChainActive().GetLocator(pindex));
 
     if (!m_db->WriteBatch(batch)) {
         return error("%s: WriteBatch failed.", __func__);
@@ -501,8 +505,8 @@ bool TxIndex::AppendCSAddress(std::string addr)
 {
     CTxDestination dest = DecodeDestination(addr);
 
-    if (dest.type() == typeid(CKeyID)) {
-        CKeyID id = boost::get<CKeyID>(dest);
+    if (dest.type() == typeid(PKHash)) {
+        PKHash id = boost::get<PKHash>(dest);
         valtype vSolution;
         vSolution.resize(20);
         memcpy(vSolution.data(), id.begin(), 20);

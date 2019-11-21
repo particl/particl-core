@@ -121,7 +121,7 @@
          <item>
           <widget class="QLabel" name="databaseCacheUnitLabel">
            <property name="text">
-            <string>MB</string>
+            <string>MiB</string>
            </property>
            <property name="textFormat">
             <enum>Qt::PlainText</enum>
@@ -233,6 +233,16 @@
             </property>
             <property name="text">
              <string>&amp;Show incoming stake notifications</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="showZeroValueCoinstakes">
+            <property name="toolTip">
+             <string>Display zero value stake transactions.</string>
+            </property>
+            <property name="text">
+             <string>&amp;Show zero value stakes</string>
             </property>
            </widget>
           </item>
@@ -752,7 +762,7 @@
         <item>
          <widget class="QLabel" name="overriddenByCommandLineInfoLabel">
           <property name="text">
-           <string>Active command-line options that override above options:</string>
+           <string>Options set in this dialog are overridden by the command line or in the configuration file:</string>
           </property>
           <property name="textFormat">
            <enum>Qt::PlainText</enum>

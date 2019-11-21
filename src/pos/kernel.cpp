@@ -1,22 +1,23 @@
 // Copyright (c) 2012-2013 The PPCoin developers
 // Copyright (c) 2014 The BlackCoin developers
-// Copyright (c) 2017-2018 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <pos/kernel.h>
 
-#include <txdb.h>
 #include <chainparams.h>
 #include <serialize.h>
 #include <streams.h>
 #include <hash.h>
+#include <util/system.h>
 #include <script/interpreter.h>
 #include <script/script.h>
-#include <script/ismine.h> // valtype
 #include <policy/policy.h>
 #include <consensus/validation.h>
 #include <coins.h>
+#include <insight/insight.h>
+#include <txmempool.h>
 
 /**
  * Stake Modifier (hash modifier of proof-of-stake):
@@ -84,7 +85,7 @@ bool CheckStakeKernelHash(const CBlockIndex *pindexPrev,
 
     targetProofOfStake = ArithToUint256(bnTarget);
 
-    uint256 bnStakeModifier = pindexPrev->bnStakeModifier;
+    const uint256 &bnStakeModifier = pindexPrev->bnStakeModifier;
     int nStakeModifierHeight = pindexPrev->nHeight;
     int64_t nStakeModifierTime = pindexPrev->nTime;
 
@@ -93,8 +94,7 @@ bool CheckStakeKernelHash(const CBlockIndex *pindexPrev,
     ss << nBlockFromTime << prevout.hash << prevout.n << nTime;
     hashProofOfStake = Hash(ss.begin(), ss.end());
 
-    if (fPrintProofOfStake)
-    {
+    if (fPrintProofOfStake) {
         LogPrintf("%s: using modifier=%s at height=%d timestamp=%s\n",
             __func__, bnStakeModifier.ToString(), nStakeModifierHeight,
             FormatISO8601DateTime(nStakeModifierTime));
@@ -102,14 +102,13 @@ bool CheckStakeKernelHash(const CBlockIndex *pindexPrev,
             __func__, bnStakeModifier.ToString(),
             nBlockFromTime, prevout.n, nTime,
             hashProofOfStake.ToString());
-    };
+    }
 
     // Now check if proof-of-stake hash meets target protocol
     if (UintToArith256(hashProofOfStake) > bnTarget)
         return false;
 
-    if (LogAcceptCategory(BCLog::POS) && !fPrintProofOfStake)
-    {
+    if (LogAcceptCategory(BCLog::POS) && !fPrintProofOfStake) {
         LogPrintf("%s: using modifier=%s at height=%d timestamp=%s\n",
             __func__, bnStakeModifier.ToString(), nStakeModifierHeight,
             FormatISO8601DateTime(nStakeModifierTime));
@@ -117,10 +116,44 @@ bool CheckStakeKernelHash(const CBlockIndex *pindexPrev,
             __func__, bnStakeModifier.ToString(),
             nBlockFromTime, prevout.n, nTime,
             hashProofOfStake.ToString());
-    };
+    }
 
     return true;
 }
+
+bool GetKernelInfo(const CBlockIndex *blockindex, const CTransaction &tx, uint256 &hash, CAmount &value, CScript &script, uint256 &blockhash)
+{
+    if (!blockindex->pprev) {
+        return false;
+    }
+    if (tx.vin.size() < 1) {
+        return false;
+    }
+    const COutPoint &prevout = tx.vin[0].prevout;
+    CTransactionRef txPrev;
+    CBlock blockKernel; // block containing stake kernel, GetTransaction should only fill the header.
+    if (!GetTransaction(prevout.hash, txPrev, Params().GetConsensus(), blockKernel)
+        || prevout.n >= txPrev->vpout.size()) {
+        return false;
+    }
+    const CTxOutBase *outPrev = txPrev->vpout[prevout.n].get();
+    if (!outPrev->IsStandardOutput()) {
+        return false;
+    }
+    value = outPrev->GetValue();
+    script = *outPrev->GetPScriptPubKey();
+    blockhash = blockKernel.GetHash();
+
+    uint32_t nBlockFromTime = blockKernel.nTime;
+    uint32_t nTime = blockindex->nTime;
+
+    CDataStream ss(SER_GETHASH, 0);
+    ss << blockindex->pprev->bnStakeModifier;
+    ss << nBlockFromTime << prevout.hash << prevout.n << nTime;
+    hash = Hash(ss.begin(), ss.end());
+
+    return true;
+};
 
 bool IsConfirmedInNPrevBlocks(const uint256 &hashBlock, const CBlockIndex *pindexFrom, int nMaxDepth, int &nActualDepth)
 {
@@ -147,15 +180,73 @@ static bool CheckAge(const CBlockIndex *pindexTip, const uint256 &hashKernelBloc
     return true;
 }
 
+int MAX_REORG_DEPTH = 1024;
+static bool SpendTooDeep(const COutPoint &prevout) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    LogPrint(BCLog::POS, "%s: SpendTooDeep %s.\n", __func__, prevout.ToString());
+    CBlockIndex *pindexTip = ::ChainActive().Tip();
+
+    if (fSpentIndex) {
+        CSpentIndexKey key(prevout.hash, prevout.n);
+        CSpentIndexValue value;
+        if (GetSpentIndex(key, value)) {
+            if (value.blockHeight < 0 || pindexTip->nHeight - value.blockHeight <= MAX_REORG_DEPTH) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Check for spend in mempool
+    {
+        LOCK(::mempool.cs);
+        auto iters = ::mempool.GetSortedDepthAndScore();
+        for (auto it : iters) {
+            for (const CTxIn &txin : it->GetSharedTx()->vin) {
+                if (txin.IsAnonInput()) {
+                    continue;
+                }
+                if (txin.prevout == prevout) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Check for spend in blocks
+    CBlockIndex *pindex = pindexTip;
+    CBlock block;
+    while (pindex && pindexTip->nHeight - pindex->nHeight < MAX_REORG_DEPTH) {
+        if (!ReadBlockFromDisk(block, pindex->GetBlockPos(), Params().GetConsensus())) {
+            LogPrintf("%s: Error reading block %s.\n", __func__, pindex->GetBlockHash().ToString());
+            return true;
+        }
+        for (const auto &tx : block.vtx) {
+            for (const CTxIn &txin : tx->vin) {
+                if (txin.IsAnonInput()) {
+                    continue;
+                }
+                if (txin.prevout == prevout) {
+                    return false;
+                }
+            }
+        }
+        pindex = pindex->pprev;
+    }
+
+    return true;
+}
+
 // Check kernel hash target and coinstake signature
-bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, const CTransaction &tx, int64_t nTime, unsigned int nBits, uint256 &hashProofOfStake, uint256 &targetProofOfStake)
+bool CheckProofOfStake(BlockValidationState &state, const CBlockIndex *pindexPrev, const CTransaction &tx, int64_t nTime, unsigned int nBits, uint256 &hashProofOfStake, uint256 &targetProofOfStake)
 {
     // pindexPrev is the current tip, the block the new block will connect on
     // nTime is the time of the new/next block
 
     if (!tx.IsCoinStake()
         || tx.vin.size() < 1) {
-        return state.DoS(100, error("%s: malformed-txn %s", __func__, tx.GetHash().ToString()), REJECT_INVALID, "malformed-txn");
+        LogPrintf("ERROR: %s: malformed-txn %s\n", __func__, tx.GetHash().ToString());
+        return state.Invalid(BlockValidationResult::DOS_100, "malformed-txn");
     }
 
     uint256 hashBlock;
@@ -170,29 +261,38 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
     CAmount amount;
 
     Coin coin;
-    if (!pcoinsTip->GetCoin(txin.prevout, coin) || coin.IsSpent()) {
+    if (!::ChainstateActive().CoinsTip().GetCoin(txin.prevout, coin) || coin.IsSpent()) {
         // Find the prevout in the txdb / blocks
 
         CBlock blockKernel; // block containing stake kernel, GetTransaction should only fill the header.
-        if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), blockKernel, true)
+        if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), blockKernel)
             || txin.prevout.n >= txPrev->vpout.size()) {
-            return state.DoS(20, error("%s: prevout-not-in-chain", __func__), REJECT_INVALID, "prevout-not-in-chain");
+            LogPrintf("ERROR: %s: prevout-not-in-chain\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_20, "prevout-not-in-chain");
         }
 
         const CTxOutBase *outPrev = txPrev->vpout[txin.prevout.n].get();
         if (!outPrev->IsStandardOutput()) {
-            return state.DoS(100, error("%s: invalid-prevout", __func__), REJECT_INVALID, "invalid-prevout");
+            LogPrintf("ERROR: %s: invalid-prevout\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
         }
 
         hashBlock = blockKernel.GetHash();
-        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-        if (mi == mapBlockIndex.end() || !chainActive.Contains(mi->second)) {
-            return state.DoS(20, error("%s: prevout-not-in-chain", __func__), REJECT_INVALID, "prevout-not-in-chain");
+        BlockMap::iterator mi = ::BlockIndex().find(hashBlock);
+        if (mi == ::BlockIndex().end() || !::ChainActive().Contains(mi->second)) {
+            LogPrintf("ERROR: %s: prevout-not-in-chain\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_20, "prevout-not-in-chain");
         }
 
         int nDepth;
         if (!CheckAge(pindexPrev, hashBlock, nDepth)) {
-            return state.DoS(100, error("%s: Tried to stake at depth %d", __func__, nDepth + 1), REJECT_INVALID, "invalid-stake-depth");
+            LogPrintf("ERROR: %s: Tried to stake at depth %d\n", __func__, nDepth + 1);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-stake-depth");
+        }
+
+        if (SpendTooDeep(txin.prevout)) {
+            LogPrintf("ERROR: %s: Tried to stake spent kernel\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
         }
 
         kernelPubKey = *outPrev->GetPScriptPubKey();
@@ -201,18 +301,21 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
         state.nFlags |= BLOCK_STAKE_KERNEL_SPENT;
     } else {
         if (coin.nType != OUTPUT_STANDARD) {
-            return state.DoS(100, error("%s: invalid-prevout", __func__), REJECT_INVALID, "invalid-prevout");
+            LogPrintf("ERROR: %s: invalid-prevout\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
         }
 
-        CBlockIndex *pindex = chainActive[coin.nHeight];
+        CBlockIndex *pindex = ::ChainActive()[coin.nHeight];
         if (!pindex) {
-            return state.DoS(100, error("%s: invalid-prevout", __func__), REJECT_INVALID, "invalid-prevout");
+            LogPrintf("ERROR: %s: invalid-prevout\n", __func__);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
         }
 
         nDepth = pindexPrev->nHeight - coin.nHeight;
         int nRequiredDepth = std::min((int)(Params().GetStakeMinConfirmations()-1), (int)(pindexPrev->nHeight / 2));
         if (nRequiredDepth > nDepth) {
-            return state.DoS(100, error("%s: Tried to stake at depth %d", __func__, nDepth + 1), REJECT_INVALID, "invalid-stake-depth");
+            LogPrintf("ERROR: %s: Tried to stake at depth %d\n", __func__, nDepth + 1);
+            return state.Invalid(BlockValidationResult::DOS_100, "invalid-stake-depth");
         }
 
         kernelPubKey = coin.out.scriptPubKey;
@@ -227,15 +330,14 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
     memcpy(&vchAmount[0], &amount, 8);
     // Redundant: all inputs are checked later during CheckInputs
     if (!VerifyScript(scriptSig, kernelPubKey, witness, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&tx, 0, vchAmount), &serror)) {
-        return state.DoS(100, error("%s: verify-script-failed, txn %s, reason %s", __func__, tx.GetHash().ToString(), ScriptErrorString(serror)),
-            REJECT_INVALID, "verify-script-failed");
+        LogPrintf("ERROR: %s: verify-script-failed, txn %s, reason %s\n", __func__, tx.GetHash().ToString(), ScriptErrorString(serror));
+        return state.Invalid(BlockValidationResult::DOS_100, "verify-cs-script-failed");
     }
 
     if (!CheckStakeKernelHash(pindexPrev, nBits, nBlockFromTime,
         amount, txin.prevout, nTime, hashProofOfStake, targetProofOfStake, LogAcceptCategory(BCLog::POS))) {
-        return state.DoS(1, // may occur during initial download or if behind on block chain sync
-            error("%s: INFO: check kernel failed on coinstake %s, hashProof=%s", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString()),
-            REJECT_INVALID, "check-kernel-failed");
+        LogPrintf("WARNING: %s: Check kernel failed on coinstake %s, hashProof=%s\n", __func__, tx.GetHash().ToString(), hashProofOfStake.ToString());
+        return state.Invalid(BlockValidationResult::DOS_1, "check-kernel-failed");
     }
 
     // Ensure the input scripts all match and that the total output value to the input script is not less than the total input value.
@@ -247,29 +349,34 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
         for (size_t k = 1; k < tx.vin.size(); ++k) {
             const CTxIn &txin = tx.vin[k];
             Coin coin;
-            if (!pcoinsTip->GetCoin(txin.prevout, coin) || coin.IsSpent()) {
-                if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock, true)
+            if (!::ChainstateActive().CoinsTip().GetCoin(txin.prevout, coin) || coin.IsSpent()) {
+                if (!GetTransaction(txin.prevout.hash, txPrev, Params().GetConsensus(), hashBlock)
                     || txin.prevout.n >= txPrev->vpout.size()) {
-                    return state.DoS(1, error("%s: prevout-not-in-chain %d", __func__, k), REJECT_INVALID, "prevout-not-in-chain");
+                    LogPrintf("ERROR: %s: prevout-not-in-chain %d\n", __func__, k);
+                    return state.Invalid(BlockValidationResult::DOS_1, "prevout-not-in-chain");
                 }
 
                 const CTxOutBase *outPrev = txPrev->vpout[txin.prevout.n].get();
                 if (!outPrev->IsStandardOutput()) {
-                    return state.DoS(100, error("%s: invalid-prevout %d", __func__, k), REJECT_INVALID, "invalid-prevout");
+                    LogPrintf("ERROR: %s: invalid-prevout %d\n", __func__, k);
+                    return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
                 }
 
                 if (kernelPubKey != *outPrev->GetPScriptPubKey()) {
-                    return state.DoS(100, error("%s: mixed-prevout-scripts %d", __func__, k), REJECT_INVALID, "mixed-prevout-scripts");
+                    LogPrintf("ERROR: %s: mixed-prevout-scripts %d\n", __func__, k);
+                    return state.Invalid(BlockValidationResult::DOS_100, "mixed-prevout-scripts");
                 }
                 amount += outPrev->GetValue();
 
                 LogPrint(BCLog::POS, "%s: Input %d of coinstake %s is spent.\n", __func__, k, tx.GetHash().ToString());
             } else {
                 if (coin.nType != OUTPUT_STANDARD) {
-                    return state.DoS(100, error("%s: invalid-prevout %d", __func__, k), REJECT_INVALID, "invalid-prevout");
+                    LogPrintf("ERROR: %s: invalid-prevout %d\n", __func__, k);
+                    return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
                 }
                 if (kernelPubKey != coin.out.scriptPubKey) {
-                    return state.DoS(100, error("%s: mixed-prevout-scripts %d", __func__, k), REJECT_INVALID, "mixed-prevout-scripts");
+                    LogPrintf("ERROR: %s: mixed-prevout-scripts %d\n", __func__, k);
+                    return state.Invalid(BlockValidationResult::DOS_100, "mixed-prevout-scripts");
                 }
                 amount += coin.out.nValue;
             }
@@ -279,7 +386,8 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
         for (const auto &txout : tx.vpout) {
             if (!txout->IsType(OUTPUT_STANDARD)) {
                 if (!txout->IsType(OUTPUT_DATA)) {
-                    return state.DoS(100, error("%s: bad-output-type", __func__), REJECT_INVALID, "bad-output-type");
+                    LogPrintf("ERROR: %s: bad-output-type\n", __func__);
+                    return state.Invalid(BlockValidationResult::DOS_100, "bad-output-type");
                 }
                 continue;
             }
@@ -291,8 +399,8 @@ bool CheckProofOfStake(CValidationState &state, const CBlockIndex *pindexPrev, c
         }
 
         if (nVerify < amount) {
-            return state.DoS(100, error("%s: verify-amount-script-failed, txn %s", __func__, tx.GetHash().ToString()),
-                REJECT_INVALID, "verify-amount-script-failed");
+            LogPrintf("ERROR: %s: verify-amount-script-failed, txn %s\n", __func__, tx.GetHash().ToString());
+            return state.Invalid(BlockValidationResult::DOS_100, "verify-amount-script-failed");
         }
     }
 
@@ -311,25 +419,33 @@ bool CheckKernel(const CBlockIndex *pindexPrev, unsigned int nBits, int64_t nTim
     uint256 hashProofOfStake, targetProofOfStake;
 
     Coin coin;
-    if (!pcoinsTip->GetCoin(prevout, coin))
-        return error("%s: prevout not found", __func__);
-    if (coin.nType != OUTPUT_STANDARD)
+    {
+        LOCK(::cs_main);
+        if (!::ChainstateActive().CoinsTip().GetCoin(prevout, coin)) {
+            return error("%s: prevout not found", __func__);
+        }
+    }
+    if (coin.nType != OUTPUT_STANDARD) {
         return error("%s: prevout not standard output", __func__);
-    if (coin.IsSpent())
+    }
+    if (coin.IsSpent()) {
         return error("%s: prevout is spent", __func__);
+    }
 
-    CBlockIndex *pindex = chainActive[coin.nHeight];
-    if (!pindex)
+    CBlockIndex *pindex = ::ChainActive()[coin.nHeight];
+    if (!pindex) {
         return false;
+    }
 
     int nRequiredDepth = std::min((int)(Params().GetStakeMinConfirmations()-1), (int)(pindexPrev->nHeight / 2));
     int nDepth = pindexPrev->nHeight - coin.nHeight;
 
-    if (nRequiredDepth > nDepth)
+    if (nRequiredDepth > nDepth) {
         return false;
-
-    if (pBlockTime)
+    }
+    if (pBlockTime) {
         *pBlockTime = pindex->GetBlockTime();
+    }
 
     CAmount amount = coin.out.nValue;
     return CheckStakeKernelHash(pindexPrev, nBits, *pBlockTime,

@@ -3,12 +3,20 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+import os
+import json
 import configparser
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose, getIndexAtProperty
+from test_framework.test_particl import (
+    ParticlTestFramework,
+    isclose,
+    getIndexAtProperty,
+    connect_nodes_bi,
+)
 from test_framework.test_framework import SkipTest
-from test_framework.util import *
+from test_framework.util import assert_raises_rpc_error
+from test_framework.authproxy import JSONRPCException
+
 
 class USBDeviceTest(ParticlTestFramework):
     def set_test_params(self):
@@ -103,16 +111,21 @@ class USBDeviceTest(ParticlTestFramework):
         except JSONRPCException as e:
             pass
 
-        txnid0 = nodes[0].sendtoaddress(addr1_0, 10)
+        extaddr1_0 = nodes[1].getnewextaddress()
+
+        txnid0 = nodes[0].sendtoaddress(addr1_0, 6)
+        txnid1 = nodes[0].sendtoaddress(extaddr1_0, 6)
 
         self.stakeBlocks(1)
-        assert(txnid0 in nodes[0].getblock(nodes[0].getblockhash(nodes[0].getblockcount()))['tx'])
+        block_txns = nodes[0].getblock(nodes[0].getblockhash(nodes[0].getblockcount()))['tx']
+        assert(txnid0 in block_txns)
+        assert(txnid1 in block_txns)
 
         ro = nodes[1].getwalletinfo()
-        assert(isclose(ro['balance'], 10.0))
+        assert(isclose(ro['balance'], 12.0))
 
         addr0_0 = nodes[0].getnewaddress()
-        hexRaw = nodes[1].createrawtransaction([], {addr0_0:1})
+        hexRaw = nodes[1].createrawtransaction([], {addr0_0:10})
         hexFunded = nodes[1].fundrawtransaction(hexRaw)['hex']
         txDecoded = nodes[1].decoderawtransaction(hexFunded)
 
@@ -127,8 +140,12 @@ class USBDeviceTest(ParticlTestFramework):
         ro = nodes[1].devicesignrawtransaction(hexFunded)
         assert(ro['errors'][0]['error'] == 'Input not found or already spent')
 
-        prevtxns = [{'txid':txDecoded['vin'][0]['txid'],'vout':txDecoded['vin'][0]['vout'],'scriptPubKey':va_addr1_0['scriptPubKey'],'amount':10},]
-        ro = nodes[1].devicesignrawtransaction(hexFunded, prevtxns, ['0/0',])
+        prevtxns = []
+        for vin in txDecoded['vin']:
+            rtx = nodes[1].getrawtransaction(vin['txid'], True)
+            prev_out = rtx['vout'][vin['vout']]
+            prevtxns.append({'txid': vin['txid'], 'vout': vin['vout'], 'scriptPubKey': prev_out['scriptPubKey']['hex'], 'amount': prev_out['value']})
+        ro = nodes[1].devicesignrawtransaction(hexFunded, prevtxns, ['0/0', '2/0'])
         assert(ro['complete'] == True)
 
         ro = nodes[1].listunspent()
@@ -139,8 +156,7 @@ class USBDeviceTest(ParticlTestFramework):
 
         self.sync_all()
 
-        ro = nodes[0].filtertransactions()
-        assert(ro[0]['txid'] == txnid2)
+        assert(nodes[0].filtertransactions()[0]['txid'] == txnid2)
 
         hwsxaddr = nodes[1].devicegetnewstealthaddress()
         assert(hwsxaddr == 'tps1qqpdwu7gqjqz9s9wfek843akvkzvw0xq3tkzs93sj4ceq60cp54mvzgpqf4tp6d7h0nza2xe362am697dax24hcr33yxqwvq58l5cf6j6q5hkqqqgykgrc')
@@ -165,8 +181,8 @@ class USBDeviceTest(ParticlTestFramework):
         self.stakeBlocks(1)
 
         ro = nodes[1].listtransactions()
-        assert(len(ro) == 4)
-        assert('test msg' in json.dumps(ro[3], default=self.jsonDecimal))
+        assert(len(ro) == 5)
+        assert('test msg' in self.dumpj(ro[4]))
 
         ro = nodes[1].listunspent()
         inputs = []
@@ -205,8 +221,6 @@ class USBDeviceTest(ParticlTestFramework):
         addrtest2 = nodes[2].getnewstealthaddress('lbl2 4bits', '4', '0xaaaa', True, True)
         assert(addrtest2 == hwsxaddr2)
 
-
-        extaddr1_0 = nodes[1].getnewextaddress()
         extaddr2_0 = nodes[2].getnewextaddress()
         assert(extaddr1_0 == extaddr2_0)
 
@@ -215,6 +229,13 @@ class USBDeviceTest(ParticlTestFramework):
         self.restart_node(1)
         account1_r = nodes[1].extkey('account')
         assert(json.dumps(account1) == json.dumps(account1_r))
+
+        # Test for coverage
+        assert(nodes[1].promptunlockdevice()['sent'] is True)
+        assert(nodes[1].unlockdevice('123')['unlocked'] is True)
+        assert_raises_rpc_error(-8, 'Neither a pin nor a passphraseword was provided.', nodes[1].unlockdevice)
+        assert('complete' in nodes[1].devicebackup())
+        assert('complete' in nodes[1].deviceloadmnemonic())
 
 
 if __name__ == '__main__':

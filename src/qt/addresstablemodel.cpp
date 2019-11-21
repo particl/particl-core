@@ -7,7 +7,6 @@
 #include <qt/guiutil.h>
 #include <qt/walletmodel.h>
 
-#include <interfaces/node.h>
 #include <key_io.h>
 #include <wallet/wallet.h>
 #include <wallet/hdwallet.h>
@@ -15,6 +14,8 @@
 #include <rpc/rpcutil.h>
 #include <util/system.h>
 #include <univalue.h>
+
+#include <algorithm>
 
 #include <QFont>
 #include <QDebug>
@@ -96,18 +97,18 @@ public:
                                   QString::fromStdString(addr.ToString())));
             }
         }
-        // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
+        // std::lower_bound() and std::upper_bound() require our cachedAddressTable list to be sorted in asc order
         // Even though the map is already sorted this re-sorting step is needed because the originating map
         // is sorted by binary address, not by base58() address.
-        qSort(cachedAddressTable.begin(), cachedAddressTable.end(), AddressTableEntryLessThan());
+        std::sort(cachedAddressTable.begin(), cachedAddressTable.end(), AddressTableEntryLessThan());
     }
 
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
         // Find address / label in model
-        QList<AddressTableEntry>::iterator lower = qLowerBound(
+        QList<AddressTableEntry>::iterator lower = std::lower_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, AddressTableEntryLessThan());
-        QList<AddressTableEntry>::iterator upper = qUpperBound(
+        QList<AddressTableEntry>::iterator upper = std::upper_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, AddressTableEntryLessThan());
         int lowerIndex = (lower - cachedAddressTable.begin());
         int upperIndex = (upper - cachedAddressTable.begin());
@@ -163,7 +164,7 @@ public:
         }
         else
         {
-            return 0;
+            return nullptr;
         }
     }
 };
@@ -310,8 +311,8 @@ QVariant AddressTableModel::headerData(int section, Qt::Orientation orientation,
 
 Qt::ItemFlags AddressTableModel::flags(const QModelIndex &index) const
 {
-    if(!index.isValid())
-        return 0;
+    if (!index.isValid()) return Qt::NoItemFlags;
+
     AddressTableEntry *rec = static_cast<AddressTableEntry*>(index.internalPointer());
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
@@ -369,20 +370,22 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
                 return QString();
             }
         }
+
+        // Add entry
+        walletModel->wallet().setAddressBook(DecodeDestination(strAddress), strLabel, "send");
     }
     else if(type == Receive)
     {
         // Generate a new address to associate with given label
-
         QString sCommand;
-        switch (addrType)
-        {
+        switch (addrType) {
             case ADDR_STEALTH:
-                sCommand = "getnewstealthaddress ";
-                sCommand += "\""+label+ "\" ";
-                sCommand += " 0 ";
-                sCommand += " 0 ";
-                sCommand += (address_type == OutputType::BECH32) ? " true " : " false ";
+                if (walletModel->isHardwareLinkedWallet()) {
+                    sCommand = "devicegetnewstealthaddress \"" + label + "\"";
+                } else {
+                    sCommand = "getnewstealthaddress \"" + label + "\"  0  0 ";
+                    sCommand += (address_type == OutputType::BECH32) ? " true " : " false ";
+                }
                 break;
             case ADDR_EXT:
                 sCommand = "getnewextaddress ";
@@ -397,21 +400,18 @@ QString AddressTableModel::addRow(const QString &type, const QString &label, con
                 sCommand += " false ";
                 sCommand += (addrType == ADDR_STANDARD256) ? " true " : " false ";
                 break;
-        };
+        }
 
         UniValue rv;
-        if (!walletModel->tryCallRpc(sCommand, rv))
+        if (!walletModel->tryCallRpc(sCommand, rv)) {
             return QString();
+        }
         return QString::fromStdString(rv.get_str());
     }
     else
     {
         return QString();
     }
-
-    // Add entry
-    walletModel->wallet().setAddressBook(DecodeDestination(strAddress), strLabel,
-                           (type == Send ? "send" : "receive"));
     return QString::fromStdString(strAddress);
 }
 

@@ -65,7 +65,9 @@ MnemonicDialog::MnemonicDialog(QWidget *parent, WalletModel *wm) :
 
     ui->cbxLanguage->clear();
     for (int l = 1; l < WLL_MAX; ++l) {
-        ui->cbxLanguage->addItem(mnLanguagesDesc[l], QString(mnLanguagesTag[l]));
+        if (MnemonicHaveLanguage(l)) {
+            ui->cbxLanguage->addItem(mnLanguagesDesc[l], QString(mnLanguagesTag[l]));
+        }
     }
 
     return;
@@ -164,7 +166,12 @@ void MnemonicDialog::hwImportComplete(bool passed)
         ui->tbxHwdOut->appendPlainText(sError);
         if (sError == "No device found."
             || sError.indexOf("6982") > -1) {
-            ui->tbxHwdOut->appendPlainText("Open particl app on device before importing.");
+#ifndef WIN32
+#ifndef MAC_OSX
+            ui->tbxHwdOut->appendPlainText("Have you added a udev rule for your device?");
+#endif
+#endif
+            ui->tbxHwdOut->appendPlainText("The Particl app on your device must be open before importing.");
         }
     } else {
         UniValue rv;

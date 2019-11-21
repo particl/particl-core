@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Particl Core developers
+// Copyright (c) 2018-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,12 +10,12 @@
 #include <vector>
 #include <string>
 
-#include <key/extkey.h>
+#include <pubkey.h>
 #include <script/sign.h>
-#include <keystore.h>
+#include <script/signingprovider.h>
 #include <memory>
 
-
+struct CExtPubKey;
 class UniValue;
 class CCoinsViewCache;
 
@@ -26,6 +26,8 @@ enum DeviceTypeID {
     USBDEVICE_DEBUG = 0,
     USBDEVICE_LEDGER_NANO_S = 1,
     USBDEVICE_TREZOR_ONE = 2,
+    USBDEVICE_LEDGER_BLUE = 3,
+    USBDEVICE_LEDGER_NANO_X = 4,
     USBDEVICE_SIZE,
 };
 
@@ -38,11 +40,12 @@ public:
     CPubKey pk;
 };
 
-class CPathKeyStore : public CBasicKeyStore
+class CPathKeyStore : public FillableSigningProvider
 {
 public:
     std::map<CKeyID, CPathKey> mapPathKeys;
 
+    using FillableSigningProvider::AddKey;
     bool AddKey(const CPathKey &pathkey)
     {
         LOCK(cs_KeyStore);
@@ -50,7 +53,7 @@ public:
         return true;
     }
 
-    using CBasicKeyStore::GetKey;
+    using FillableSigningProvider::GetKey;
     bool GetKey(const CKeyID &address, CPathKey &keyOut) const
     {
         LOCK(cs_KeyStore);
@@ -123,7 +126,7 @@ public:
 
     virtual int SignMessage(const std::vector<uint32_t> &vPath, const std::string &sMessage, std::vector<uint8_t> &vchSig, std::string &sError) { return 0; };
 
-    virtual int PrepareTransaction(CMutableTransaction &tx, const CCoinsViewCache &view, const CKeyStore &keystore, int nHashType) { return 0; };
+    virtual int PrepareTransaction(CMutableTransaction &tx, const CCoinsViewCache &view, const FillableSigningProvider &keystore, int nHashType) { return 0; };
 
     //int SignHash(const std::vector<uint32_t> &vPath, const uint256 &hash, std::vector<uint8_t> &vchSig, std::string &sError);
     virtual int SignTransaction(const std::vector<uint32_t> &vPath, const std::vector<uint8_t> &vSharedSecret, const CMutableTransaction *tx,
@@ -132,6 +135,11 @@ public:
 
     virtual int LoadMnemonic(uint32_t wordcount, bool pinprotection, std::string &sError) { return 0; };
     virtual int Backup(std::string &sError) { return 0; };
+
+    virtual int OpenIfUnlocked(std::string &sError) { return 0; }
+    virtual int PromptUnlock(std::string &sError) { return 0; }
+    virtual int Unlock(std::string pin, std::string passphraseword, std::string &sError) { return 0; };
+    virtual int GenericUnlock(std::vector<uint8_t>* msg_in, uint16_t msg_type_in) { return 0; };
 
     const DeviceType *pType = nullptr;
     char cPath[512];

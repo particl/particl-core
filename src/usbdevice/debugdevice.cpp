@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Particl Core developers
+// Copyright (c) 2018-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +8,7 @@
 #include <univalue.h>
 #include <validation.h>
 #include <hash.h>
+#include <util/validation.h>
 
 namespace usb_device {
 
@@ -44,7 +45,7 @@ int CDebugDevice::GetInfo(UniValue &info, std::string &sError)
 int CDebugDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
-        return errorN(1, sError, __func__, _("Path depth out of range.").c_str());
+        return errorN(1, sError, __func__, "Path depth out of range.");
     }
 
     CExtKey vkOut, vkWork = ekv;
@@ -63,7 +64,7 @@ int CDebugDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std
 int CDebugDevice::GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
-        return errorN(1, sError, __func__, _("Path depth out of range.").c_str());
+        return errorN(1, sError, __func__, "Path depth out of range.");
     }
 
     CExtKey vkOut, vkWork = ekv;

@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2015 The ShadowCoin developers
-// Copyright (c) 2017-2018 The Particl developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -40,7 +40,6 @@ std::vector<uint8_t> &SetCompressedInt64(std::vector<uint8_t> &v, uint64_t n)
     if (b > 0) {
         memcpy(&v[0], (uint8_t*) &n, b);
     }
-
     return v;
 };
 
@@ -54,7 +53,6 @@ int64_t GetCompressedInt64(const std::vector<uint8_t> &v, uint64_t &n)
     if (b < 9) {
         memcpy((uint8_t*) &n, &v[0], b);
     }
-
     return (int64_t)n;
 };
 
@@ -70,9 +68,7 @@ bool GetCKeyID(const std::vector<uint8_t> &v, CKeyID &n)
     if (v.size() != 20) {
         return false;
     }
-
     memcpy((uint8_t*) &n, &v[0], 20);
-
     return true;
 };
 
@@ -81,7 +77,6 @@ std::vector<uint8_t> &SetString(std::vector<uint8_t> &v, const char *s)
     size_t len = strlen(s);
     v.resize(len);
     memcpy(&v[0], (uint8_t*) &s, len);
-
     return v;
 };
 
@@ -89,7 +84,6 @@ std::vector<uint8_t> &SetChar(std::vector<uint8_t> &v, const uint8_t c)
 {
     v.resize(1);
     v[0] = c;
-
     return v;
 };
 
@@ -97,7 +91,6 @@ std::vector<uint8_t> &PushUInt32(std::vector<uint8_t> &v, const uint32_t i)
 {
     size_t o = v.size();
     v.resize(o+4);
-
     memcpy(&v[o], (uint8_t*) &i, 4);
     return v;
 };
@@ -224,7 +217,7 @@ int ExtractExtKeyPath(const std::string &sPath, std::vector<uint32_t> &vPath)
 
     vPath.reserve(nSlashes + 1);
 
-    char *p = strtok(data, "/");
+    char *token, *p = strtok_r(data, "/", &token);
 
     while (p) {
         uint32_t nChild;
@@ -254,15 +247,15 @@ int ExtractExtKeyPath(const std::string &sPath, std::vector<uint32_t> &vPath)
 
         if (fHarden) {
             if ((nChild >> 31) == 0) {
-                nChild |= 1 << 31;
+                nChild |= 1U << 31;
             } else {
                 return 8;
             }
-        };
+        }
 
         vPath.push_back(nChild);
 
-        p = strtok(nullptr, "/");
+        p = strtok_r(nullptr, "/", &token);
     }
 
     if (vPath.size() < 1) {
@@ -327,14 +320,13 @@ void CExtKey::SetSeed(const unsigned char *seed, unsigned int nSeedLen)
     memset(vchFingerprint, 0, sizeof(vchFingerprint));
 };
 
-int CExtKey::SetKeyCode(const unsigned char *pkey, const unsigned char *pcode)
+void CExtKey::SetKeyCode(const unsigned char *pkey, const unsigned char *pcode)
 {
     key.Set(pkey, true);
     memcpy(chaincode, pcode, 32);
     nDepth = 0;
     nChild = 0;
     memset(vchFingerprint, 0, sizeof(vchFingerprint));
-    return 0;
 };
 
 CExtPubKey CExtKey::Neutered() const
@@ -516,7 +508,7 @@ void CExtKeyPair::SetSeed(const unsigned char *seed, unsigned int nSeedLen)
     memset(vchFingerprint, 0, sizeof(vchFingerprint));
 };
 
-int CExtKeyPair::SetKeyCode(const unsigned char *pkey, const unsigned char *pcode)
+void CExtKeyPair::SetKeyCode(const unsigned char *pkey, const unsigned char *pcode)
 {
     key.Set(pkey, true);
     pubkey = key.GetPubKey();
@@ -524,7 +516,6 @@ int CExtKeyPair::SetKeyCode(const unsigned char *pkey, const unsigned char *pcod
     nDepth = 0;
     nChild = 0;
     memset(vchFingerprint, 0, sizeof(vchFingerprint));
-    return 0;
 };
 
 
@@ -545,7 +536,6 @@ int CEKAStealthKey::SetSxAddr(CStealthAddress &sxAddr) const
     sxAddr.scan_pubkey = pkScan;
     sxAddr.spend_pubkey = pkSpend;
     sxAddr.scan_secret.Set(skScan.begin(), true);
-
     return 0;
 };
 
@@ -612,7 +602,7 @@ int CExtKeyAccount::HaveKey(const CKeyID &id, bool fUpdate, const CEKAKey *&pak,
         pak = &mi->second;
         ismine = IsMine(pak->nParent);
         if (LogAcceptCategory(BCLog::HDWALLET)) {
-            LogPrintf("HaveKey in lookAhead %s\n", CBitcoinAddress(mi->first).ToString());
+            LogPrintf("HaveKey in lookAhead %s\n", EncodeDestination(PKHash(mi->first)));
         }
         return fUpdate ? HK_LOOKAHEAD_DO_UPDATE : HK_LOOKAHEAD;
     }
@@ -780,7 +770,7 @@ bool CExtKeyAccount::SaveKey(const CKeyID &id, const CEKAKey &keyIn)
     }
 
     if (mapLookAhead.erase(id) != 1) {
-        LogPrintf("Warning: SaveKey %s key not found in look ahead %s.\n", GetIDString58(), CBitcoinAddress(id).ToString());
+        LogPrintf("Warning: SaveKey %s key not found in look ahead %s.\n", GetIDString58(), EncodeDestination(PKHash(id)));
     }
 
     mapKeys[id] = keyIn;
@@ -821,7 +811,7 @@ bool CExtKeyAccount::SaveKey(const CKeyID &id, const CEKAKey &keyIn)
     }
 
     if (LogAcceptCategory(BCLog::HDWALLET)) {
-        LogPrintf("Saved key %s %d, %s.\n", GetIDString58(), keyIn.nParent, CBitcoinAddress(id).ToString());
+        LogPrintf("Saved key %s %d, %s.\n", GetIDString58(), keyIn.nParent, EncodeDestination(PKHash(id)));
 
         // Check match
         CStoredExtKey *pa;
@@ -865,7 +855,7 @@ bool CExtKeyAccount::SaveKey(const CKeyID &id, const CEKASCKey &keyIn)
     mapStealthChildKeys[id] = keyIn;
 
     if (LogAcceptCategory(BCLog::HDWALLET)) {
-        LogPrintf("SaveKey(): CEKASCKey %s, %s.\n", GetIDString58(), CBitcoinAddress(id).ToString());
+        LogPrintf("SaveKey(): CEKASCKey %s, %s.\n", GetIDString58(), EncodeDestination(PKHash(id)));
     }
 
     return true;
@@ -921,7 +911,7 @@ int CExtKeyAccount::AddLookBehind(uint32_t nChain, uint32_t nKeys)
             keyId = pk.GetID();
             if ((mi = mapKeys.find(keyId)) != mapKeys.end()) {
                 if (LogAcceptCategory(BCLog::HDWALLET)) {
-                    LogPrintf("%s: key exists in map skipping %s.\n", __func__, CBitcoinAddress(keyId).ToString());
+                    LogPrintf("%s: key exists in map skipping %s.\n", __func__, EncodeDestination(PKHash(keyId)));
                 }
                 continue;
             }
@@ -942,7 +932,7 @@ int CExtKeyAccount::AddLookBehind(uint32_t nChain, uint32_t nKeys)
         mapLookAhead[keyId] = CEKAKey(nChain, nChildOut);
 
         if (LogAcceptCategory(BCLog::HDWALLET)) {
-            LogPrintf("%s: Added %s, look-ahead size %u.\n", __func__, CBitcoinAddress(keyId).ToString(), mapLookAhead.size());
+            LogPrintf("%s: Added %s, look-ahead size %u.\n", __func__, EncodeDestination(PKHash(keyId)), mapLookAhead.size());
         }
     }
 
@@ -982,7 +972,7 @@ int CExtKeyAccount::AddLookAhead(uint32_t nChain, uint32_t nKeys)
             keyId = pk.GetID();
             if ((mi = mapKeys.find(keyId)) != mapKeys.end()) {
                 if (LogAcceptCategory(BCLog::HDWALLET)) {
-                    LogPrintf("%s: key exists in map skipping %s.\n", __func__, CBitcoinAddress(keyId).ToString());
+                    LogPrintf("%s: key exists in map skipping %s.\n", __func__, EncodeDestination(PKHash(keyId)));
                 }
                 continue;
             }
@@ -1004,7 +994,7 @@ int CExtKeyAccount::AddLookAhead(uint32_t nChain, uint32_t nKeys)
         pc->nLastLookAhead = nChildOut;
 
         if (LogAcceptCategory(BCLog::HDWALLET)) {
-            LogPrintf("%s: Added %s, look-ahead size %u.\n", __func__, CBitcoinAddress(keyId).ToString(), mapLookAhead.size());
+            LogPrintf("%s: Added %s, look-ahead size %u.\n", __func__, EncodeDestination(PKHash(keyId)), mapLookAhead.size());
         }
     }
 
@@ -1084,13 +1074,27 @@ inline void AppendPathLink(std::string &s, uint32_t n, char cH)
     s += "/";
     bool fHardened = false;
     if ((n >> 31) == 1) {
-        n &= ~(1 << 31);
+        n &= ~(1U << 31);
         fHardened = true;
     }
     s += strprintf("%u", n);
     if (fHardened) {
         s += cH;
     }
+};
+
+int ConvertPath(const std::vector<uint8_t> &path_in, std::vector<uint32_t> &path_out)
+{
+    path_out.clear();
+    if (path_in.size() % 4 != 0) {
+        return 1;
+    }
+    for (size_t o = 0; o < path_in.size(); o+=4) {
+        uint32_t n;
+        memcpy(&n, &path_in[o], 4);
+        path_out.push_back(n);
+    }
+    return 0;
 };
 
 int PathToString(const std::vector<uint8_t> &vPath, std::string &sPath, char cH, size_t nStart)

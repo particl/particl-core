@@ -79,7 +79,7 @@
         <item row="4" column="2">
          <widget class="QLineEdit" name="reqLabel">
           <property name="toolTip">
-           <string>An optional label to associate with the new receiving address.</string>
+           <string>An optional label to associate with the new receiving address (used by you to identify an invoice).  It is also attached to the payment request.</string>
           </property>
          </widget>
         </item>
@@ -100,7 +100,7 @@
         <item row="6" column="2">
          <widget class="QLineEdit" name="reqMessage">
           <property name="toolTip">
-           <string>An optional message to attach to the payment request, which will be displayed when the request is opened. Note: The message will not be sent with the payment over the Particl network.</string>
+           <string>An optional message that is attached to the payment request and may be displayed to the sender.</string>
           </property>
          </widget>
         </item>
@@ -142,7 +142,7 @@
              </size>
             </property>
             <property name="text">
-             <string>&amp;Request payment</string>
+             <string>&amp;Create new receiving address</string>
             </property>
             <property name="icon">
              <iconset resource="../bitcoin.qrc">
@@ -244,7 +244,7 @@
              <string>Use bech32 encoding.</string>
             </property>
             <property name="text">
-             <string>Generate native segwit (Bech32) address</string>
+             <string>Use bech32 encoding</string>
             </property>
            </widget>
           </item>

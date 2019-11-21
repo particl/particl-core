@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018 The Particl Core developers
+# Copyright (c) 2018-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose
-from test_framework.util import *
+from test_framework.test_particl import ParticlTestFramework, isclose, connect_nodes_bi
+
 
 class WalletRPCTest(ParticlTestFramework):
     def set_test_params(self):
@@ -46,6 +45,19 @@ class WalletRPCTest(ParticlTestFramework):
         assert(ro[0]['txid'] == txnid)
         assert(isclose(ro[0]['amount'], 2.999512))
         assert(len(ro[0]['outputs']) == 2)
+
+        extkey_list = nodes[0].extkey('list', True)
+        assert(len(extkey_list) == 2)
+        for k in extkey_list:
+            evkey_info = nodes[0].extkey('info', k['evkey'])['key_info']
+            epkey_info = nodes[0].extkey('info', k['epkey'])['key_info']
+            assert(k['epkey'] == evkey_info['ext_public_key'])
+            assert(evkey_info['depth'] == epkey_info['depth'])
+            assert(evkey_info['parent_fingerprint'] == epkey_info['parent_fingerprint'])
+            assert(evkey_info['child_index'] == epkey_info['child_index'])
+            assert(evkey_info['chain_code'] == epkey_info['chain_code'])
+            assert(evkey_info['pubkey'] == epkey_info['key'])
+            assert(evkey_info['address'] == epkey_info['address'])
 
 
 if __name__ == '__main__':

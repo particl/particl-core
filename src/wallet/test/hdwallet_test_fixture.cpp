@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 The Particl Core developers
+// Copyright (c) 2017-2019 The Particl Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,52 +10,57 @@
 #include <wallet/rpcwallet.h>
 #include <validation.h>
 #include <util/system.h>
+#include <blind.h>
 
 HDWalletTestingSetup::HDWalletTestingSetup(const std::string &chainName):
     TestingSetup(chainName, true) // fParticlMode = true
 {
+    ECC_Start_Stealth();
+    ECC_Start_Blinding();
+
     bool fFirstRun;
-    pwalletMain = std::make_shared<CHDWallet>(*m_chain, WalletLocation(), WalletDatabase::CreateMock());
+    pwalletMain = std::make_shared<CHDWallet>(m_chain.get(), WalletLocation(), WalletDatabase::CreateMock());
     AddWallet(pwalletMain);
     pwalletMain->LoadWallet(fFirstRun);
-    RegisterValidationInterface(pwalletMain.get());
+    pwalletMain->Initialise();
+    pwalletMain->m_chain_notifications_handler = m_chain->handleNotifications(*pwalletMain);
 
-    RegisterWalletRPCCommands(tableRPC);
-    RegisterHDWalletRPCCommands(tableRPC);
+    m_chain_client->registerRpcs();
 }
 
 HDWalletTestingSetup::~HDWalletTestingSetup()
 {
-    UnregisterValidationInterface(pwalletMain.get());
     RemoveWallet(pwalletMain);
     pwalletMain.reset();
 
     mapStakeSeen.clear();
     listStakeSeen.clear();
+
+    ECC_Stop_Stealth();
+    ECC_Stop_Blinding();
 }
 
 std::string StripQuotes(std::string s)
 {
     // Strip double quotes from start and/or end of string
     size_t len = s.length();
-    if (len < 2)
-    {
-        if (len > 0 && s[0] == '"')
+    if (len < 2) {
+        if (len > 0 && s[0] == '"') {
             s = s.substr(1, len - 1);
+        }
         return s;
-    };
+    }
 
-    if (s[0] == '"')
-    {
-        if (s[len-1] == '"')
+    if (s[0] == '"') {
+        if (s[len-1] == '"') {
             s = s.substr(1, len - 2);
-        else
+        } else {
             s = s.substr(1, len - 1);
+        }
     } else
-    if (s[len-1] == '"')
-    {
+    if (s[len-1] == '"') {
         s = s.substr(0, len - 2);
-    };
+    }
     return s;
 };
 

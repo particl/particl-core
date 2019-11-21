@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose
-from test_framework.util import *
+from decimal import Decimal
+
+from test_framework.test_particl import ParticlTestFramework, isclose, connect_nodes_bi
+from test_framework.util import satoshi_round
+from test_framework.authproxy import JSONRPCException
 
 
 class MultiSigTest(ParticlTestFramework):
@@ -37,32 +39,25 @@ class MultiSigTest(ParticlTestFramework):
 
         ro = nodes[0].getnewaddress()
         addrs.append(ro)
-        ro = nodes[0].getaddressinfo(ro)
-        pubkeys.append(ro['pubkey'])
+        pubkeys.append(nodes[0].getaddressinfo(ro)['pubkey'])
 
         ro = nodes[0].getnewaddress()
         addrs.append(ro)
-        ro = nodes[0].getaddressinfo(ro)
-        pubkeys.append(ro['pubkey'])
-
+        pubkeys.append(nodes[0].getaddressinfo(ro)['pubkey'])
 
         nodes[1].extkeyimportmaster('drip fog service village program equip minute dentist series hawk crop sphere olympic lazy garbage segment fox library good alley steak jazz force inmate')
+        nodes[2].extkeyimportmaster(nodes[2].mnemonic('new', '', 'french')['mnemonic'])
 
         ro = nodes[1].getnewaddress()
         addrs.append(ro)
-        ro = nodes[1].getaddressinfo(ro)
-        pubkeys.append(ro['pubkey'])
-
-
-        nodes[2].extkeyimportmaster(nodes[2].mnemonic('new', '', 'french')['mnemonic'])
+        pubkeys.append(nodes[1].getaddressinfo(ro)['pubkey'])
 
         ro = nodes[2].getnewaddress()
         addrs.append(ro)
-        ro = nodes[2].getaddressinfo(ro)
-        pubkeys.append(ro['pubkey'])
+        pubkeys.append(nodes[2].getaddressinfo(ro)['pubkey'])
 
 
-        v = [addrs[0],addrs[1],pubkeys[2]]
+        v = [addrs[0], addrs[1], pubkeys[2]]
         msAddr = nodes[0].addmultisigaddress(2, v)['address']
 
         ro = nodes[0].getaddressinfo(msAddr)
@@ -71,11 +66,8 @@ class MultiSigTest(ParticlTestFramework):
         redeemScript = ro['hex']
 
 
-        ro = nodes[0].sendtoaddress(msAddr, 10)
-        mstxid = ro
-
-        ro = nodes[0].gettransaction(mstxid)
-        hexfund = ro['hex']
+        mstxid = nodes[0].sendtoaddress(msAddr, 10)
+        hexfund = nodes[0].gettransaction(mstxid)['hex']
         ro = nodes[0].decoderawtransaction(hexfund)
 
         fundscriptpubkey = ''
@@ -105,13 +97,11 @@ class MultiSigTest(ParticlTestFramework):
 
         vk0 = nodes[0].dumpprivkey(addrs[0])
         signkeys = [vk0,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)
-        hexRaw1 = ro['hex']
+        hexRaw1 = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)['hex']
 
         vk1 = nodes[0].dumpprivkey(addrs[1])
         signkeys = [vk1,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)
-        hexRaw2 = ro['hex']
+        hexRaw2 = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)['hex']
 
         txnid_spendMultisig = nodes[0].sendrawtransaction(hexRaw2)
 
@@ -126,8 +116,7 @@ class MultiSigTest(ParticlTestFramework):
         ro = nodes[0].getaddressinfo(msAddr256)
         assert(ro['isscript'] == True)
 
-        ro = nodes[0].addmultisigaddress(2, v, "", True, True)['address']
-        msAddr256 = ro
+        msAddr256 = nodes[0].addmultisigaddress(2, v, "", True, True)['address']
         assert(msAddr256 == "tpj1vtll9wnsd7dxzygrjp2j5jr5tgrjsjmj3vwjf7vf60f9p50g5ddqmasmut")
 
         ro = nodes[0].getaddressinfo(msAddr256)
@@ -136,7 +125,6 @@ class MultiSigTest(ParticlTestFramework):
         redeemScript = ro['hex']
 
         mstxid2 = nodes[0].sendtoaddress(msAddr256, 9)
-
         hexfund = nodes[0].gettransaction(mstxid2)['hex']
         ro = nodes[0].decoderawtransaction(hexfund)
 
@@ -166,16 +154,11 @@ class MultiSigTest(ParticlTestFramework):
 
         vk0 = nodes[0].dumpprivkey(addrs[0])
         signkeys = [vk0,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)
-        hexRaw1 = ro['hex']
-
-        ro = nodes[0].decoderawtransaction(hexRaw1)
-
+        hexRaw1 = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)['hex']
 
         vk1 = nodes[0].dumpprivkey(addrs[1])
         signkeys = [vk1,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)
-        hexRaw2 = ro['hex']
+        hexRaw2 = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)['hex']
 
         txnid_spendMultisig2 = nodes[0].sendrawtransaction(hexRaw2)
 
@@ -189,14 +172,12 @@ class MultiSigTest(ParticlTestFramework):
         redeemScript = ro['hex']
 
         opts = {"recipe":"abslocktime","time":946684800,"addr":msAddr}
-        ro = nodes[0].buildscript(opts)
-        scriptTo = ro['hex']
+        scriptTo = nodes[0].buildscript(opts)['hex']
 
         outputs = [{'address':'script', 'amount':8, 'script':scriptTo},]
         mstxid3 = nodes[0].sendtypeto('part', 'part', outputs)
 
-        ro = nodes[0].gettransaction(mstxid3)
-        hexfund = ro['hex']
+        hexfund = nodes[0].gettransaction(mstxid3)['hex']
         ro = nodes[0].decoderawtransaction(hexfund)
 
         fundscriptpubkey = ''
@@ -226,15 +207,11 @@ class MultiSigTest(ParticlTestFramework):
 
         vk0 = nodes[0].dumpprivkey(addrs[0])
         signkeys = [vk0,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)
-        hexRaw1 = ro['hex']
-
-        ro = nodes[0].decoderawtransaction(hexRaw1)
+        hexRaw1 = nodes[0].signrawtransactionwithkey(hexRaw, signkeys, inputs)['hex']
 
         vk1 = nodes[0].dumpprivkey(addrs[1])
         signkeys = [vk1,]
-        ro = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)
-        hexRaw2 = ro['hex']
+        hexRaw2 = nodes[0].signrawtransactionwithkey(hexRaw1, signkeys, inputs)['hex']
 
         txnid_spendMultisig3 = nodes[0].sendrawtransaction(hexRaw2)
 
@@ -250,12 +227,12 @@ class MultiSigTest(ParticlTestFramework):
         addrTo = nodes[0].getnewaddress()
 
         opts = {"recipe":"ifcoinstake","addrstake":stakeAddr,"addrspend":msAddr}
-        ro = nodes[0].buildscript(opts)
-        scriptTo = ro['hex']
+        scriptTo = nodes[0].buildscript(opts)['hex']
 
         outputs = [{ 'address':'script', 'amount':1, 'script':scriptTo }]
         txFundId = nodes[0].sendtypeto('part', 'part', outputs)
         hexfund = nodes[0].gettransaction(txFundId)['hex']
+
         ro = nodes[0].decoderawtransaction(hexfund)
         for vout in ro['vout']:
             if not isclose(vout['value'], 1.0):

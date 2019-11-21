@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017-2018 The Particl Core developers
+# Copyright (c) 2017-2019 The Particl Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-from test_framework.test_particl import ParticlTestFramework
-from test_framework.test_particl import isclose
-from test_framework.util import *
+import json
+
+from test_framework.test_particl import ParticlTestFramework, isclose, connect_nodes_bi
+
 
 class ExtKeyTest(ParticlTestFramework):
     def set_test_params(self):
@@ -125,8 +126,8 @@ class ExtKeyTest(ParticlTestFramework):
 
 
         # start staking
-        ro = node.walletsettings('stakelimit', {'height':3})
-        ro = node.reservebalance(False)
+        node.walletsettings('stakelimit', {'height':3})
+        node.reservebalance(False)
 
         assert(self.wait_for_height(node, 3))
 

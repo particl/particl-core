@@ -2,14 +2,14 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <test/test_bitcoin.h>
+#include <test/util/setup_common.h>
 
 #include <crypto/sha256.h>
 
 #include <secp256k1.h>
 #include <secp256k1_rangeproof.h>
 #include <secp256k1_bulletproofs.h>
-#include <inttypes.h>
+#include <stdint.h>
 #include <util/strencodings.h>
 
 #include <boost/test/unit_test.hpp>
@@ -62,22 +62,19 @@ BOOST_AUTO_TEST_CASE(ct_test)
     uint8_t blind[nTxOut][32];
 
     size_t nBlinded = 0;
-    for (size_t k = 0; k < txouts.size(); ++k)
-    {
+    for (size_t k = 0; k < txouts.size(); ++k) {
         CTxOutValueTest &txout = txouts[k];
 
-        if (nBlinded + 1 == txouts.size())
-        {
+        if (nBlinded + 1 == txouts.size()) {
             // Last to-be-blinded value: compute from all other blinding factors.
             // sum of output blinding values must equal sum of input blinding values
             BOOST_CHECK(secp256k1_pedersen_blind_sum(ctx, &blind[nBlinded][0], &blindptrs[0], 2, 1));
             blindptrs.push_back(&blind[nBlinded++][0]);
-        } else
-        {
+        } else {
             //GetStrongRandBytes(&blind[nBlinded][0], 32);
             InsecureRandBytes(&blind[nBlinded][0], 32);
             blindptrs.push_back(&blind[nBlinded++][0]);
-        };
+        }
 
         BOOST_CHECK(secp256k1_pedersen_commit(ctx, &txout.commitment, (uint8_t*)blindptrs.back(), amount_outs[k], &secp256k1_generator_const_h, &secp256k1_generator_const_g));
 
@@ -116,7 +113,7 @@ BOOST_AUTO_TEST_CASE(ct_test)
             secp256k1_generator_h));
 
         txout.vchRangeproof.resize(nRangeProofLen);
-    };
+    }
 
     std::vector<secp256k1_pedersen_commitment*> vpCommitsIn, vpCommitsOut;
     vpCommitsIn.push_back(&txins[0].commitment);
@@ -127,8 +124,7 @@ BOOST_AUTO_TEST_CASE(ct_test)
     BOOST_CHECK(secp256k1_pedersen_verify_tally(ctx, vpCommitsIn.data(), vpCommitsIn.size(), vpCommitsOut.data(), vpCommitsOut.size()));
 
 
-    for (size_t k = 0; k < txouts.size(); ++k)
-    {
+    for (size_t k = 0; k < txouts.size(); ++k) {
         CTxOutValueTest &txout = txouts[k];
 
         int rexp;
@@ -140,14 +136,12 @@ BOOST_AUTO_TEST_CASE(ct_test)
             &min_value, &max_value,
             &txout.vchRangeproof[0], txout.vchRangeproof.size()) == 1);
 
-
         min_value = 0;
         max_value = 0;
         BOOST_CHECK(1 == secp256k1_rangeproof_verify(ctx, &min_value, &max_value,
             &txout.commitment, txout.vchRangeproof.data(), txout.vchRangeproof.size(),
             nullptr, 0,
             secp256k1_generator_h));
-
 
         CPubKey ephemeral_key(txout.vchNonceCommitment);
         BOOST_CHECK(ephemeral_key.IsValid());
@@ -167,7 +161,7 @@ BOOST_AUTO_TEST_CASE(ct_test)
 
         msg[9] = '\0';
         BOOST_CHECK(memcmp(msg, "narration", 9) == 0);
-    };
+    }
 
     secp256k1_context_destroy(ctx);
 }
@@ -243,10 +237,6 @@ BOOST_AUTO_TEST_CASE(ct_test_bulletproofs)
         size_t nRangeProofLen = 5134;
         txout.vchRangeproof.resize(nRangeProofLen);
 
-        uint64_t min_value = 0;
-        const char *message = "narration";
-        size_t mlen = strlen(message);
-
         uint8_t *proof = &txout.vchRangeproof[0];
         const uint8_t *blindptrs_[] = {blindptrs.back()};
         BOOST_CHECK(secp256k1_bulletproof_rangeproof_prove(ctx, scratch, gens, proof, &nRangeProofLen, (const uint64_t*)&amount_outs[k], NULL, blindptrs_, 1, &secp256k1_generator_const_h, 64, nonce.begin(), NULL, 0) == 1);
@@ -272,14 +262,13 @@ BOOST_AUTO_TEST_CASE(ct_test_bulletproofs)
         size_t nRangeProofLen = txout.vchRangeproof.size();
         BOOST_CHECK(secp256k1_bulletproof_rangeproof_verify(ctx, scratch, gens, proof, nRangeProofLen, NULL, &txout.commitment, 1, 64, &secp256k1_generator_const_h, NULL, 0) == 1);
 
-
         CPubKey ephemeral_key(txout.vchNonceCommitment);
         BOOST_CHECK(ephemeral_key.IsValid());
         uint256 nonce = kto_outs[k].ECDH(ephemeral_key);
         CSHA256().Write(nonce.begin(), 32).Finalize(nonce.begin());
         uint8_t blind_out[32];
         BOOST_CHECK(secp256k1_bulletproof_rangeproof_rewind(ctx, gens, &value_out, blind_out, proof, nRangeProofLen, 0, &txout.commitment, &secp256k1_generator_const_h, nonce.begin(), NULL, 0));
-        BOOST_CHECK(value_out == amount_outs[k]);
+        BOOST_CHECK((int64_t)value_out == amount_outs[k]);
     }
 
     secp256k1_bulletproof_generators_destroy(ctx, gens);

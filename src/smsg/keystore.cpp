@@ -32,11 +32,23 @@ bool SecMsgKeyStore::GetPubKey(const CKeyID &idk, CPubKey &pk)
     LOCK(cs_KeyStore);
     std::map<CKeyID, SecMsgKey>::const_iterator it = mapKeys.find(idk);
 
-    if (it != mapKeys.end())
-    {
+    if (it != mapKeys.end()) {
         pk = it->second.pubkey;
         return true;
-    };
+    }
+
+    return false;
+};
+
+bool SecMsgKeyStore::GetKey(const CKeyID &idk, CKey &key)
+{
+    LOCK(cs_KeyStore);
+    std::map<CKeyID, SecMsgKey>::const_iterator it = mapKeys.find(idk);
+
+    if (it != mapKeys.end()) {
+        key = it->second.key;
+        return true;
+    }
 
     return false;
 };

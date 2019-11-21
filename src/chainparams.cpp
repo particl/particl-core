@@ -24,14 +24,14 @@ int64_t CChainParams::GetCoinYearReward(int64_t nTime) const
 {
     static const int64_t nSecondsInYear = 365 * 24 * 60 * 60;
 
-    if (strNetworkID != "regtest")
-    {
+    if (strNetworkID != "regtest") {
         // Y1 5%, Y2 4%, Y3 3%, Y4 2%, ... YN 2%
         int64_t nYearsSinceGenesis = (nTime - genesis.nTime) / nSecondsInYear;
 
-        if (nYearsSinceGenesis >= 0 && nYearsSinceGenesis < 3)
+        if (nYearsSinceGenesis >= 0 && nYearsSinceGenesis < 3) {
             return (5 - nYearsSinceGenesis) * CENT;
-    };
+        }
+    }
 
     return nCoinYearReward;
 };
@@ -45,17 +45,22 @@ int64_t CChainParams::GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64
     return nSubsidy + nFees;
 };
 
+int64_t CChainParams::GetMaxSmsgFeeRateDelta(int64_t smsg_fee_prev) const
+{
+    return (smsg_fee_prev * consensus.smsg_fee_max_delta_percent) / 1000000;
+};
+
 bool CChainParams::CheckImportCoinbase(int nHeight, uint256 &hash) const
 {
-    for (auto &cth : Params().vImportedCoinbaseTxns)
-    {
-        if (cth.nHeight != (uint32_t)nHeight)
+    for (auto &cth : Params().vImportedCoinbaseTxns) {
+        if (cth.nHeight != (uint32_t)nHeight) {
             continue;
-
-        if (hash == cth.hash)
+        }
+        if (hash == cth.hash) {
             return true;
+        }
         return error("%s - Hash mismatch at height %d: %s, expect %s.", __func__, nHeight, hash.ToString(), cth.hash.ToString());
-    };
+    }
 
     return error("%s - Unknown height.", __func__);
 };
@@ -63,11 +68,11 @@ bool CChainParams::CheckImportCoinbase(int nHeight, uint256 &hash) const
 
 const DevFundSettings *CChainParams::GetDevFundSettings(int64_t nTime) const
 {
-    for (size_t i = vDevFundSettings.size(); i-- > 0; )
-    {
-        if (nTime > vDevFundSettings[i].first)
-            return &vDevFundSettings[i].second;
-    };
+    for (auto i = vDevFundSettings.rbegin(); i != vDevFundSettings.rend(); ++i) {
+        if (nTime > i->first) {
+            return &i->second;
+        }
+    }
 
     return nullptr;
 };
@@ -98,18 +103,16 @@ bool CChainParams::IsBech32Prefix(const std::vector<unsigned char> &vchPrefixIn,
 
 bool CChainParams::IsBech32Prefix(const char *ps, size_t slen, CChainParams::Base58Type &rtype) const
 {
-    for (size_t k = 0; k < MAX_BASE58_TYPES; ++k)
-    {
+    for (size_t k = 0; k < MAX_BASE58_TYPES; ++k) {
         const auto &hrp = bech32Prefixes[k];
         size_t hrplen = hrp.size();
         if (hrplen > 0
             && slen > hrplen
-            && strncmp(ps, (const char*)&hrp[0], hrplen) == 0)
-        {
+            && strncmp(ps, (const char*)&hrp[0], hrplen) == 0) {
             rtype = static_cast<CChainParams::Base58Type>(k);
             return true;
-        };
-    };
+        }
+    }
 
     return false;
 };
@@ -252,13 +255,12 @@ static CBlock CreateGenesisBlockRegTest(uint32_t nTime, uint32_t nNonce, uint32_
     txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp)) << OP_RETURN << nHeight;
 
     txNew.vpout.resize(nGenesisOutputsRegtest);
-    for (size_t k = 0; k < nGenesisOutputsRegtest; ++k)
-    {
+    for (size_t k = 0; k < nGenesisOutputsRegtest; ++k) {
         OUTPUT_PTR<CTxOutStandard> out = MAKE_OUTPUT<CTxOutStandard>();
         out->nValue = regTestOutputs[k].second;
         out->scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ParseHex(regTestOutputs[k].first) << OP_EQUALVERIFY << OP_CHECKSIG;
         txNew.vpout[k] = out;
-    };
+    }
 
     CBlock genesis;
     genesis.nTime    = nTime;
@@ -286,14 +288,12 @@ static CBlock CreateGenesisBlockTestNet(uint32_t nTime, uint32_t nNonce, uint32_
     txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp)) << OP_RETURN << nHeight;
 
     txNew.vpout.resize(nGenesisOutputsTestnet);
-    for (size_t k = 0; k < nGenesisOutputsTestnet; ++k)
-    {
+    for (size_t k = 0; k < nGenesisOutputsTestnet; ++k) {
         OUTPUT_PTR<CTxOutStandard> out = MAKE_OUTPUT<CTxOutStandard>();
         out->nValue = genesisOutputsTestnet[k].second;
         out->scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ParseHex(genesisOutputsTestnet[k].first) << OP_EQUALVERIFY << OP_CHECKSIG;
         txNew.vpout[k] = out;
-    };
-
+    }
 
     // Foundation Fund Raiser Funds
     // rVDQRVBKnQEfNmykMSY9DHgqv8s7XZSf5R fc118af69f63d426f61c6a4bf38b56bcdaf8d069
@@ -357,13 +357,12 @@ static CBlock CreateGenesisBlockMainNet(uint32_t nTime, uint32_t nNonce, uint32_
     txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp)) << OP_RETURN << nHeight;
 
     txNew.vpout.resize(nGenesisOutputs);
-    for (size_t k = 0; k < nGenesisOutputs; ++k)
-    {
+    for (size_t k = 0; k < nGenesisOutputs; ++k) {
         OUTPUT_PTR<CTxOutStandard> out = MAKE_OUTPUT<CTxOutStandard>();
         out->nValue = genesisOutputs[k].second;
         out->scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ParseHex(genesisOutputs[k].first) << OP_EQUALVERIFY << OP_CHECKSIG;
         txNew.vpout[k] = out;
-    };
+    }
 
     // Foundation Fund Raiser Funds
     // RHFKJkrB4H38APUDVckr7TDwrK11N7V7mx
@@ -420,17 +419,29 @@ static CBlock CreateGenesisBlockMainNet(uint32_t nTime, uint32_t nNonce, uint32_
 class CMainParams : public CChainParams {
 public:
     CMainParams() {
-        strNetworkID = "main";
-
+        strNetworkID = CBaseChainParams::MAIN;
         consensus.nSubsidyHalvingInterval = 210000;
         consensus.BIP34Height = 0;
         consensus.BIP65Height = 0;
         consensus.BIP66Height = 0;
-        consensus.OpIsCoinstakeTime = 1510272000; // 2017-11-10 00:00:00 UTC
+        consensus.CSVHeight = 1;
+        consensus.SegwitHeight = 0;
+        consensus.MinBIP9WarningHeight = 0;
+
+        consensus.OpIsCoinstakeTime = 0x5A04EC00;       // 2017-11-10 00:00:00 UTC
         consensus.fAllowOpIsCoinstakeWithP2PKH = false;
-        consensus.nPaidSmsgTime = 0xFFFFFFFF; // 2106 TODO: lower
-        consensus.csp2shTime = 0xFFFFFFFF; // 2106 TODO: lower
-        consensus.bulletproofTime = 0xFFFFFFFF; // 2106 TODO: lower
+        consensus.nPaidSmsgTime = 0x5C791EC0;           // 2019-03-01 12:00:00
+        consensus.smsg_fee_time = 0x5D2DBC40;           // 2019-07-16 12:00:00
+        consensus.bulletproof_time = 0x5D2DBC40;        // 2019-07-16 12:00:00
+        consensus.rct_time = 0x5D2DBC40;                // 2019-07-16 12:00:00
+        consensus.smsg_difficulty_time = 0x5D2DBC40;    // 2019-07-16 12:00:00
+
+        consensus.smsg_fee_period = 5040;
+        consensus.smsg_fee_funding_tx_per_k = 200000;
+        consensus.smsg_fee_msg_per_day_per_k = 50000;
+        consensus.smsg_fee_max_delta_percent = 43;
+        consensus.smsg_min_difficulty = 0x1effffff;
+        consensus.smsg_difficulty_max_delta = 0xffff;
 
         consensus.powLimit = uint256S("000000000000bfffffffffffffffffffffffffffffffffffffffffffffffffff");
 
@@ -444,21 +455,11 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
 
-        // Deployment of BIP68, BIP112, and BIP113.
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].bit = 0;
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nStartTime = 1462060800; // May 1st, 2016
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nTimeout = 1493596800; // May 1st, 2017
-
-        // Deployment of SegWit (BIP141, BIP143, and BIP147)
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].bit = 1;
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nStartTime = 1479168000; // November 15th, 2016.
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout = 1510704000; // November 15th, 2017.
-
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000391526231dc4c21e4c");
+        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000006e8971ba3f3faf0d8f");
 
         // By default assume that the signatures in ancestors of this block are valid.
-        consensus.defaultAssumeValid = uint256S("0x5dacfb4e040ed98031f8586ce1516b6813990b53d677fb45a49099e8ceecb6fa"); //250000
+        consensus.defaultAssumeValid = uint256S("0x5a1e8651002ce2d5a43144e4e62b4a91b8189e976175fa4e69195c21607d1bf9"); // 560766
 
         consensus.nMinRCTOutputDepth = 12;
 
@@ -483,6 +484,8 @@ public:
         SetLastImportHeight();
 
         nPruneAfterHeight = 100000;
+        m_assumed_blockchain_size = 1;
+        m_assumed_chain_state_size = 1;
 
         genesis = CreateGenesisBlockMainNet(1500296400, 31429, 0x1f00ffff); // 2017-07-17 13:00:00
         consensus.hashGenesisBlock = genesis.GetHash();
@@ -499,6 +502,7 @@ public:
         vSeeds.emplace_back("mainnet-seed.particl.io");
         vSeeds.emplace_back("dnsseed-mainnet.particl.io");
         vSeeds.emplace_back("mainnet.particl.io");
+        vSeeds.emplace_back("dnsseed.tecnovert.net");
 
 
         vDevFundSettings.emplace_back(0,
@@ -520,25 +524,25 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x88, 0xB2, 0x1E}; // xpub
         base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x88, 0xAD, 0xE4}; // xprv
 
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("ph","ph"+2);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("pr","pr"+2);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("pl","pl"+2);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("pj","pj"+2);
-        bech32Prefixes[SECRET_KEY].assign           ("px","px"+2);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("pep","pep"+3);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("pex","pex"+3);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("ps","ps"+2);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("pek","pek"+3);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("pea","pea"+3);
-        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("pcs","pcs"+3);
+        bech32Prefixes[PUBKEY_ADDRESS].assign       ("ph",(const char*)"ph"+2);
+        bech32Prefixes[SCRIPT_ADDRESS].assign       ("pr",(const char*)"pr"+2);
+        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("pl",(const char*)"pl"+2);
+        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("pj",(const char*)"pj"+2);
+        bech32Prefixes[SECRET_KEY].assign           ("px",(const char*)"px"+2);
+        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("pep",(const char*)"pep"+3);
+        bech32Prefixes[EXT_SECRET_KEY].assign       ("pex",(const char*)"pex"+3);
+        bech32Prefixes[STEALTH_ADDRESS].assign      ("ps",(const char*)"ps"+2);
+        bech32Prefixes[EXT_KEY_HASH].assign         ("pek",(const char*)"pek"+3);
+        bech32Prefixes[EXT_ACC_HASH].assign         ("pea",(const char*)"pea"+3);
+        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("pcs",(const char*)"pcs"+3);
 
-        bech32_hrp = "bc";
+        bech32_hrp = "pw";
 
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
-        fMineBlocksOnDemand = false;
+        m_is_test_chain = false;
 
         checkpointData = {
             {
@@ -547,26 +551,27 @@ public:
                 { 30000,    uint256S("0x35d95c12799323d7b418fd64df9d88ef67ef27f057d54033b5b2f38a5ecaacbf")},
                 { 91000,    uint256S("0x4d1ffaa5b51431918a0c74345e2672035c743511359ac8b1be67467b02ff884c")},
                 { 112250,   uint256S("0x89e4b23471aea7a875df835d6f89613fd87ba649e7a1d8cb892917d0080ef337")},
-                { 128650,   uint256S("0x43597f7dd16719ab2ea63e9c34266120c85cf592a4ec61f82822003da6874408")},
                 { 159010,   uint256S("0xb724d359a10aaa51755a65da830f4aaf4e44aad0246ebf5f73171122bc4b3997")},
                 { 170880,   uint256S("0x03d23bd24386ebeb41c81f84145c46cc3f64e4d114b2b8d2bb14e5855f254f2a")},
-                { 194500,   uint256S("0x57ad502b9948d4c8291c8ce7b6394e4129985aab436b7242130a1ab0c74e1129")},
                 { 213800,   uint256S("0xfd6c0e5f7444a9e09a5fa1652db73d5b8628aeabe162529a5356be700509aa80")},
                 { 254275,   uint256S("0x7f454ac5629ef667f40f900357d30bd63b7983363255880fd155fadbc9add957")},
                 { 282130,   uint256S("0xf720421256795081c1d985e997bb81d040d557f24b9e2d16a1c13d21734fb2b1")},
                 { 303640,   uint256S("0x7cc035d7888ee6d824cec8ff01a6287a71873d874f72a5fd3706d227b88f8e99")},
+                { 357320,   uint256S("0x20b01f2bef93197bb014d27125939cd8d4f6a34257fdb498ae64c8644b8f2289")},
+                { 376100,   uint256S("0xff704cb42547da4efb2b32054c72c7682b7634ac34fda4ec88fe7badc666338c")},
+                { 421718,   uint256S("0xd22f8acde6c5aed109087eb2799620c560a78e573fa587a1660aef854069d75d")},
+                { 443228,   uint256S("0x1e2ae3edb2fa5b398c2f719d2bbb44b3089fb96170b6676c0c963f12bceba489")},
+                { 536715,   uint256S("0x769203b7076c5bfd02b22e3798f12f1de91fb751839a3903d9a57537898f9daa")},
+                { 560766,   uint256S("0x5a1e8651002ce2d5a43144e4e62b4a91b8189e976175fa4e69195c21607d1bf9")},
             }
         };
 
         chainTxData = ChainTxData {
-            // Data from rpc: getchaintxstats 4096 7cc035d7888ee6d824cec8ff01a6287a71873d874f72a5fd3706d227b88f8e99
-            /* nTime    */ 1539414688,
-            /* nTxCount */ 342225,
-            /* dTxRate  */ 0.008
+            // Data from rpc: getchaintxstats 4096 5a1e8651002ce2d5a43144e4e62b4a91b8189e976175fa4e69195c21607d1bf9
+            /* nTime    */ 1572541952,
+            /* nTxCount */ 631841,
+            /* dTxRate  */ 0.009
         };
-
-        /* disable fallback fee on mainnet */
-        m_fallback_fee_enabled = false;
     }
 
     void SetOld()
@@ -576,6 +581,9 @@ public:
         consensus.BIP34Hash = uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
         consensus.BIP65Height = 388381; // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
         consensus.BIP66Height = 363725; // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
+        consensus.CSVHeight = 419328; // 000000000000000004a1b34462cb8aeebd5799177f7a29cf28f2d1961716b5b5
+        consensus.SegwitHeight = 481824; // 0000000000000000001c8018d9cb3b742ef25114f27563e3fc4a1902167f9893
+        consensus.MinBIP9WarningHeight = consensus.SegwitHeight + consensus.nMinerConfirmationWindow;
         consensus.powLimit = uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
         genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
@@ -586,6 +594,8 @@ public:
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
+
+        bech32_hrp = "bc";
     }
 };
 
@@ -595,16 +605,29 @@ public:
 class CTestNetParams : public CChainParams {
 public:
     CTestNetParams() {
-        strNetworkID = "test";
+        strNetworkID = CBaseChainParams::TESTNET;
         consensus.nSubsidyHalvingInterval = 210000;
         consensus.BIP34Height = 0;
         consensus.BIP65Height = 0;
         consensus.BIP66Height = 0;
+        consensus.CSVHeight = 1;
+        consensus.SegwitHeight = 0;
+        consensus.MinBIP9WarningHeight = 0;
+
         consensus.OpIsCoinstakeTime = 0;
         consensus.fAllowOpIsCoinstakeWithP2PKH = true; // TODO: clear for next testnet
         consensus.nPaidSmsgTime = 0;
-        consensus.csp2shTime = 0xFFFFFFFF; // 2106 TODO: lower
-        consensus.bulletproofTime = 0xFFFFFFFF; // 2106 TODO: lower
+        consensus.smsg_fee_time = 0x5C67FB40;           // 2019-02-16 12:00:00
+        consensus.bulletproof_time = 0x5C67FB40;        // 2019-02-16 12:00:00
+        consensus.rct_time = 0;
+        consensus.smsg_difficulty_time = 0x5D19F5C0;    // 2019-07-01 12:00:00
+
+        consensus.smsg_fee_period = 5040;
+        consensus.smsg_fee_funding_tx_per_k = 200000;
+        consensus.smsg_fee_msg_per_day_per_k = 50000;
+        consensus.smsg_fee_max_delta_percent = 43;
+        consensus.smsg_min_difficulty = 0x1effffff;
+        consensus.smsg_difficulty_max_delta = 0xffff;
 
         consensus.powLimit = uint256S("000000000005ffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -617,21 +640,11 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = 1230767999; // December 31, 2008
 
-        // Deployment of BIP68, BIP112, and BIP113.
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].bit = 0;
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nStartTime = 1456790400; // March 1st, 2016
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nTimeout = 1493596800; // May 1st, 2017
-
-        // Deployment of SegWit (BIP141, BIP143, and BIP147)
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].bit = 1;
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nStartTime = 1462060800; // May 1st 2016
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout = 1493596800; // May 1st 2017
-
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00");
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000071e14839bcfb9dada");
 
         // By default assume that the signatures in ancestors of this block are valid.
-        //consensus.defaultAssumeValid = uint256S("0x000000000871ee6842d3648317ccc8a435eb8cc3c2429aee94faff9ba26b05a0"); //1043841
+        consensus.defaultAssumeValid = uint256S("0x51143e8e5a5fd68f0aebdb8eca15950826db6cc3d7ed8aec447444aff74174bc"); // 511910
 
         consensus.nMinRCTOutputDepth = 12;
 
@@ -652,7 +665,8 @@ public:
         SetLastImportHeight();
 
         nPruneAfterHeight = 1000;
-
+        m_assumed_blockchain_size = 1;
+        m_assumed_chain_state_size = 1;
 
         genesis = CreateGenesisBlockTestNet(1502309248, 5924, 0x1f00ffff);
         consensus.hashGenesisBlock = genesis.GetHash();
@@ -666,6 +680,7 @@ public:
         // nodes with support for servicebits filtering should be at the top
         vSeeds.emplace_back("testnet-seed.particl.io");
         vSeeds.emplace_back("dnsseed-testnet.particl.io");
+        vSeeds.emplace_back("dnsseed-testnet.tecnovert.net");
 
         vDevFundSettings.push_back(std::make_pair(0, DevFundSettings("rTvv9vsbu269mjYYEecPYinDG8Bt7D86qD", 10, 60)));
 
@@ -682,43 +697,45 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x35, 0x87, 0xCF}; // tpub
         base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x35, 0x83, 0x94}; // tprv
 
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("tph","tph"+3);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("tpr","tpr"+3);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("tpl","tpl"+3);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("tpj","tpj"+3);
-        bech32Prefixes[SECRET_KEY].assign           ("tpx","tpx"+3);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("tpep","tpep"+4);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("tpex","tpex"+4);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("tps","tps"+3);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("tpek","tpek"+4);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("tpea","tpea"+4);
-        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("tpcs","tpcs"+4);
+        bech32Prefixes[PUBKEY_ADDRESS].assign       ("tph",(const char*)"tph"+3);
+        bech32Prefixes[SCRIPT_ADDRESS].assign       ("tpr",(const char*)"tpr"+3);
+        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("tpl",(const char*)"tpl"+3);
+        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("tpj",(const char*)"tpj"+3);
+        bech32Prefixes[SECRET_KEY].assign           ("tpx",(const char*)"tpx"+3);
+        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("tpep",(const char*)"tpep"+4);
+        bech32Prefixes[EXT_SECRET_KEY].assign       ("tpex",(const char*)"tpex"+4);
+        bech32Prefixes[STEALTH_ADDRESS].assign      ("tps",(const char*)"tps"+3);
+        bech32Prefixes[EXT_KEY_HASH].assign         ("tpek",(const char*)"tpek"+4);
+        bech32Prefixes[EXT_ACC_HASH].assign         ("tpea",(const char*)"tpea"+4);
+        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("tpcs",(const char*)"tpcs"+4);
 
-        bech32_hrp = "tb";
+        bech32_hrp = "tpw";
 
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = false;
-        fMineBlocksOnDemand = false;
+        m_is_test_chain = true;
 
         checkpointData = {
             {
                 {127620, uint256S("0xe5ab909fc029b253bad300ccf859eb509e03897e7853e8bfdde2710dbf248dd1")},
                 {210920, uint256S("0x5534f546c3b5a264ca034703b9694fabf36d749d66e0659eef5f0734479b9802")},
                 {259290, uint256S("0x58267bdf935a2e0716cb910d055b8cdaa019089a5f71c3db90765dc7101dc5dc")},
+                {312860, uint256S("0xaba2e3b2dcf1970b53b67c869325c5eefd3a107e62518fa4640ddcfadf88760d")},
+                {375987, uint256S("0x96bb6bb7085d0fdb85757069af7b1513c6a86b476ba531a67af6e9dd21385255")},
+                {428386, uint256S("0x08bbc92c831b864c809b575901e37aaa9aa2b2e38212594aedf2712a87267da9")},
+                {455325, uint256S("0x801444340d20609ad4525bac23f75d47c9525bd9c7a2390f2a41106c4048e4a5")},
+                {511910, uint256S("0x51143e8e5a5fd68f0aebdb8eca15950826db6cc3d7ed8aec447444aff74174bc")},
             }
         };
 
         chainTxData = ChainTxData{
-            // Data from rpc: getchaintxstats 4096 58267bdf935a2e0716cb910d055b8cdaa019089a5f71c3db90765dc7101dc5dc
-            /* nTime    */ 1539418544,
-            /* nTxCount */ 278613,
+            // Data from rpc: getchaintxstats 4096 51143e8e5a5fd68f0aebdb8eca15950826db6cc3d7ed8aec447444aff74174bc
+            /* nTime    */ 1572541600,
+            /* nTxCount */ 557095,
             /* dTxRate  */ 0.005
         };
-
-        /* enable fallback fee on testnet */
-        m_fallback_fee_enabled = true;
     }
 };
 
@@ -728,18 +745,31 @@ public:
 class CRegTestParams : public CChainParams {
 public:
     explicit CRegTestParams(const ArgsManager& args) {
-        strNetworkID = "regtest";
+        strNetworkID =  CBaseChainParams::REGTEST;
         consensus.nSubsidyHalvingInterval = 150;
         consensus.BIP16Exception = uint256();
-        consensus.BIP34Height = 100000000; // BIP34 has not activated on regtest (far in the future so block v1 are not rejected in tests)
+        consensus.BIP34Height = 500; // BIP34 activated on regtest (Used in functional tests)
         consensus.BIP34Hash = uint256();
-        consensus.BIP65Height = 1351; // BIP65 activated on regtest (Used in rpc activation tests)
-        consensus.BIP66Height = 1251; // BIP66 activated on regtest (Used in rpc activation tests)
+        consensus.BIP65Height = 1351; // BIP65 activated on regtest (Used in functional tests)
+        consensus.BIP66Height = 1251; // BIP66 activated on regtest (Used in functional tests)
+        consensus.CSVHeight = 432; // CSV activated on regtest (Used in rpc activation tests)
+        consensus.SegwitHeight = 0; // SEGWIT is always activated on regtest unless overridden
+        consensus.MinBIP9WarningHeight = 0;
+
         consensus.OpIsCoinstakeTime = 0;
         consensus.fAllowOpIsCoinstakeWithP2PKH = false;
         consensus.nPaidSmsgTime = 0;
-        consensus.csp2shTime = 0;
-        consensus.bulletproofTime = 0;
+        consensus.smsg_fee_time = 0;
+        consensus.bulletproof_time = 0;
+        consensus.rct_time = 0;
+        consensus.smsg_difficulty_time = 0;
+
+        consensus.smsg_fee_period = 50;
+        consensus.smsg_fee_funding_tx_per_k = 200000;
+        consensus.smsg_fee_msg_per_day_per_k = 50000;
+        consensus.smsg_fee_max_delta_percent = 4300;
+        consensus.smsg_min_difficulty = 0x1f0fffff;
+        consensus.smsg_difficulty_max_delta = 0xffff;
 
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -751,12 +781,6 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = 0;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].bit = 0;
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nStartTime = 0;
-        consensus.vDeployments[Consensus::DEPLOYMENT_CSV].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].bit = 1;
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nStartTime = Consensus::BIP9Deployment::ALWAYS_ACTIVE;
-        consensus.vDeployments[Consensus::DEPLOYMENT_SEGWIT].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
@@ -764,7 +788,7 @@ public:
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("0x00");
 
-        consensus.nMinRCTOutputDepth = 1;
+        consensus.nMinRCTOutputDepth = 2;
 
         pchMessageStart[0] = 0x09;
         pchMessageStart[1] = 0x12;
@@ -783,8 +807,10 @@ public:
         SetLastImportHeight();
 
         nPruneAfterHeight = 1000;
+        m_assumed_blockchain_size = 0;
+        m_assumed_chain_state_size = 0;
 
-        UpdateVersionBitsParametersFromArgs(args);
+        UpdateActivationParametersFromArgs(args);
 
         genesis = CreateGenesisBlockRegTest(1487714923, 0, 0x207fffff);
 
@@ -798,8 +824,8 @@ public:
         vSeeds.clear();      //!< Regtest mode doesn't have any DNS seeds.
 
         fDefaultConsistencyChecks = true;
-        fRequireStandard = false;
-        fMineBlocksOnDemand = true;
+        fRequireStandard = true;
+        m_is_test_chain = true;
 
         checkpointData = {
             {
@@ -820,28 +846,25 @@ public:
         base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x35, 0x87, 0xCF}; // tpub
         base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x35, 0x83, 0x94}; // tprv
 
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("tph","tph"+3);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("tpr","tpr"+3);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("tpl","tpl"+3);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("tpj","tpj"+3);
-        bech32Prefixes[SECRET_KEY].assign           ("tpx","tpx"+3);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("tpep","tpep"+4);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("tpex","tpex"+4);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("tps","tps"+3);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("tpek","tpek"+4);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("tpea","tpea"+4);
-        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("tpcs","tpcs"+4);
+        bech32Prefixes[PUBKEY_ADDRESS].assign       ("tph",(const char*)"tph"+3);
+        bech32Prefixes[SCRIPT_ADDRESS].assign       ("tpr",(const char*)"tpr"+3);
+        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("tpl",(const char*)"tpl"+3);
+        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("tpj",(const char*)"tpj"+3);
+        bech32Prefixes[SECRET_KEY].assign           ("tpx",(const char*)"tpx"+3);
+        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("tpep",(const char*)"tpep"+4);
+        bech32Prefixes[EXT_SECRET_KEY].assign       ("tpex",(const char*)"tpex"+4);
+        bech32Prefixes[STEALTH_ADDRESS].assign      ("tps",(const char*)"tps"+3);
+        bech32Prefixes[EXT_KEY_HASH].assign         ("tpek",(const char*)"tpek"+4);
+        bech32Prefixes[EXT_ACC_HASH].assign         ("tpea",(const char*)"tpea"+4);
+        bech32Prefixes[STAKE_ONLY_PKADDR].assign    ("tpcs",(const char*)"tpcs"+4);
 
-        bech32_hrp = "bcrt";
+        bech32_hrp = "rtpw";
 
         chainTxData = ChainTxData{
             0,
             0,
             0
         };
-
-        /* enable fallback fee on regtest */
-        m_fallback_fee_enabled = true;
     }
 
     void SetOld()
@@ -860,6 +883,8 @@ public:
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,239);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+
+        bech32_hrp = "bcrt";
     }
 
     /**
@@ -870,11 +895,22 @@ public:
         consensus.vDeployments[d].nStartTime = nStartTime;
         consensus.vDeployments[d].nTimeout = nTimeout;
     }
-    void UpdateVersionBitsParametersFromArgs(const ArgsManager& args);
+    void UpdateActivationParametersFromArgs(const ArgsManager& args);
 };
 
-void CRegTestParams::UpdateVersionBitsParametersFromArgs(const ArgsManager& args)
+void CRegTestParams::UpdateActivationParametersFromArgs(const ArgsManager& args)
 {
+    if (gArgs.IsArgSet("-segwitheight")) {
+        int64_t height = gArgs.GetArg("-segwitheight", consensus.SegwitHeight);
+        if (height < -1 || height >= std::numeric_limits<int>::max()) {
+            throw std::runtime_error(strprintf("Activation height %ld for segwit is out of valid range. Use -1 to disable segwit.", height));
+        } else if (height == -1) {
+            LogPrintf("Segwit disabled for testing\n");
+            height = std::numeric_limits<int>::max();
+        }
+        consensus.SegwitHeight = static_cast<int>(height);
+    }
+
     if (!args.IsArgSet("-vbparams")) return;
 
     for (const std::string& strDeployment : args.GetArgs("-vbparams")) {
