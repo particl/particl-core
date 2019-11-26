@@ -92,34 +92,29 @@ void AddCoins(CCoinsViewCache& cache, const CTransaction &tx, int nHeight, bool 
     bool fCoinbase = tx.IsCoinBase() || tx.IsCoinStake();
     const uint256& txid = tx.GetHash();
 
-    if (tx.IsParticlVersion())
-    {
-        for (size_t i = 0; i < tx.vpout.size(); ++i)
-        {
+    if (tx.IsParticlVersion()) {
+        for (size_t i = 0; i < tx.vpout.size(); ++i) {
             const CTxOutBase *out = tx.vpout[i].get();
             bool overwrite = check ? cache.HaveCoin(COutPoint(txid, i)) : fCoinbase;
             Coin coin;
-            if (out->IsType(OUTPUT_STANDARD))
-            {
+            if (out->IsType(OUTPUT_STANDARD)) {
                 CTxOut txout(out->GetValue(), *out->GetPScriptPubKey());
                 coin = Coin(txout, nHeight, fCoinbase);
             } else
-            if (out->IsType(OUTPUT_CT))
-            {
+            if (out->IsType(OUTPUT_CT)) {
                 CAmount nV = 0;
                 CTxOut txout(nV, *out->GetPScriptPubKey());
                 coin = Coin(txout, nHeight, fCoinbase);
                 coin.nType = OUTPUT_CT;
                 coin.commitment = ((CTxOutCT*)out)->commitment;
-            } else
-            {
+            } else {
                 continue; // Data or anon
-            };
+            }
 
             cache.AddCoin(COutPoint(txid, i), std::move(coin), overwrite);
-        };
+        }
         return;
-    };
+    }
 
     for (size_t i = 0; i < tx.vout.size(); ++i) {
         bool overwrite = check ? cache.HaveCoin(COutPoint(txid, i)) : fCoinbase;
@@ -255,39 +250,6 @@ unsigned int CCoinsViewCache::GetCacheSize() const {
     return cacheCoins.size();
 }
 
-CAmount CCoinsViewCache::GetPlainValueIn(const CTransaction &tx,
-    size_t &nStandard, size_t &nCT, size_t &nRingCT) const
-{
-    if (tx.IsCoinBase())
-        return 0;
-
-    CAmount nResult = 0;
-    for (unsigned int i = 0; i < tx.vin.size(); i++)
-    {
-        if (tx.vin[i].IsAnonInput())
-        {
-            nRingCT++;
-            continue;
-        };
-
-        const Coin &coin = AccessCoin(tx.vin[i].prevout);
-        switch (coin.nType)
-        {
-            case OUTPUT_STANDARD:
-                nResult += coin.out.nValue;
-                nStandard++;
-                break;
-            case OUTPUT_CT:
-                nCT++;
-                break;
-            default:
-                break;
-        };
-    };
-
-    return nResult;
-}
-
 CAmount CCoinsViewCache::GetValueIn(const CTransaction& tx) const
 {
     assert(!tx.IsParticlVersion());
@@ -305,8 +267,9 @@ bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const
 {
     if (!tx.IsCoinBase()) {
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
-            if (tx.vin[i].IsAnonInput())
+            if (tx.vin[i].IsAnonInput()) {
                 continue;
+            }
             if (!HaveCoin(tx.vin[i].prevout)) {
                 return false;
             }

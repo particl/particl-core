@@ -157,13 +157,12 @@ bool GetKernelInfo(const CBlockIndex *blockindex, const CTransaction &tx, uint25
 
 bool IsConfirmedInNPrevBlocks(const uint256 &hashBlock, const CBlockIndex *pindexFrom, int nMaxDepth, int &nActualDepth)
 {
-    for (const CBlockIndex *pindex = pindexFrom; pindex && pindexFrom->nHeight - pindex->nHeight < nMaxDepth; pindex = pindex->pprev)
-    if (hashBlock == pindex->GetBlockHash())
-    {
-        nActualDepth = pindexFrom->nHeight - pindex->nHeight;
-        return true;
-    };
-
+    for (const CBlockIndex *pindex = pindexFrom; pindex && pindexFrom->nHeight - pindex->nHeight < nMaxDepth; pindex = pindex->pprev) {
+        if (hashBlock == pindex->GetBlockHash()) {
+            nActualDepth = pindexFrom->nHeight - pindex->nHeight;
+            return true;
+        }
+    }
     return false;
 }
 
@@ -175,12 +174,12 @@ static bool CheckAge(const CBlockIndex *pindexTip, const uint256 &hashKernelBloc
 
     int nRequiredDepth = std::min((int)(Params().GetStakeMinConfirmations()-1), (int)(pindexTip->nHeight / 2));
 
-    if (IsConfirmedInNPrevBlocks(hashKernelBlock, pindexTip, nRequiredDepth, nDepth))
+    if (IsConfirmedInNPrevBlocks(hashKernelBlock, pindexTip, nRequiredDepth, nDepth)) {
         return false;
+    }
     return true;
 }
 
-int MAX_REORG_DEPTH = 1024;
 static bool SpendTooDeep(const COutPoint &prevout) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     LogPrint(BCLog::POS, "%s: SpendTooDeep %s.\n", __func__, prevout.ToString());
@@ -361,7 +360,6 @@ bool CheckProofOfStake(BlockValidationState &state, const CBlockIndex *pindexPre
                     LogPrintf("ERROR: %s: invalid-prevout %d\n", __func__, k);
                     return state.Invalid(BlockValidationResult::DOS_100, "invalid-prevout");
                 }
-
                 if (kernelPubKey != *outPrev->GetPScriptPubKey()) {
                     LogPrintf("ERROR: %s: mixed-prevout-scripts %d\n", __func__, k);
                     return state.Invalid(BlockValidationResult::DOS_100, "mixed-prevout-scripts");
@@ -414,6 +412,7 @@ bool CheckCoinStakeTimestamp(int nHeight, int64_t nTimeBlock)
     return (nTimeBlock & Params().GetStakeTimestampMask(nHeight)) == 0;
 }
 
+// Used only when staking, not during validation
 bool CheckKernel(const CBlockIndex *pindexPrev, unsigned int nBits, int64_t nTime, const COutPoint &prevout, int64_t *pBlockTime)
 {
     uint256 hashProofOfStake, targetProofOfStake;

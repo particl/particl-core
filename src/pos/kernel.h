@@ -9,6 +9,7 @@
 
 #include <validation.h>
 
+static const int MAX_REORG_DEPTH = 1024;
 
 // Compute the hash modifier for proof-of-stake
 uint256 ComputeStakeModifierV2(const CBlockIndex *pindexPrev, const uint256 &kernel);

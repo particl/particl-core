@@ -42,10 +42,6 @@ bench_bench_particl_SOURCES = \
   bench/prevector.cpp \
   bench/blind.cpp \
   bench/mlsag.cpp \
-  test/util/transaction_utils.h \
-  test/util/transaction_utils.cpp \
-  test/util/setup_common.h \
-  test/util/setup_common.cpp \
   test/util.h \
   test/util.cpp
 
@@ -61,6 +57,7 @@ bench_bench_particl_LDADD = \
   $(LIBPARTICL_UTIL) \
   $(LIBPARTICL_CONSENSUS) \
   $(LIBPARTICL_CRYPTO) \
+  $(LIBTEST_UTIL) \
   $(LIBLEVELDB) \
   $(LIBLEVELDB_SSE42) \
   $(LIBMEMENV) \
