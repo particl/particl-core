@@ -123,26 +123,6 @@ bool stringsMatchI(const std::string &sString, const std::string &sFind, int typ
 std::string StripQuotes(std::string s)
 {
     return TrimQuotes(s);
-    // // Strip double quotes from start and/or end of string
-    // size_t len = s.length();
-    // if (len < 2) {
-    //     if (len > 0 && s[0] == '"') {
-    //         s = s.substr(1, len - 1);
-    //     }
-    //     return s;
-    // }
-
-    // if (s[0] == '"') {
-    //     if (s[len-1] == '"') {
-    //         s = s.substr(1, len - 2);
-    //     } else {
-    //         s = s.substr(1, len - 1);
-    //     }
-    // } else
-    // if (s[len-1] == '"') {
-    //     s = s.substr(0, len - 2);
-    // }
-    // return s;
 };
 
 std::string &TrimQuotes(std::string &s)
