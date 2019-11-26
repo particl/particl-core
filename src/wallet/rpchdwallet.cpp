@@ -18,7 +18,7 @@
 #include <script/sign.h>
 #include <script/descriptor.h>
 #include <timedata.h>
-#include <util/system.h>
+#include <util/string.h>
 #include <txdb.h>
 #include <blind.h>
 #include <anon.h>

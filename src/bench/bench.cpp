@@ -112,7 +112,7 @@ void benchmark::BenchRunner::RunAll(Printer& printer, uint64_t num_evals, double
     printer.header();
 
     for (const auto& p : benchmarks()) {
-        RegTestingSetup test{};
+        TestingSetup test{CBaseChainParams::REGTEST, p.first.rfind("Particl", 0) == 0 ? true : false};
         {
             LOCK(cs_main);
             assert(::ChainActive().Height() == 0);

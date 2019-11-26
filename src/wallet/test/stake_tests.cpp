@@ -23,6 +23,7 @@
 #include <thread>
 
 #include <boost/test/unit_test.hpp>
+#include <util/string.h>
 
 struct StakeTestingSetup: public TestingSetup {
     StakeTestingSetup(const std::string& chainName = CBaseChainParams::REGTEST):
@@ -331,13 +332,13 @@ BOOST_AUTO_TEST_CASE(stake_test)
     }
 
     BOOST_CHECK_NO_THROW(rv = CallRPC("getnewextaddress lblTestKey"));
-    std::string extaddr = StripQuotes(rv.write());
+    std::string extaddr = part::StripQuotes(rv.write());
 
     BOOST_CHECK(pwallet->GetBalance().m_mine_trusted + pwallet->GetStaked() == 12500000108911);
 
     {
         BOOST_CHECK_NO_THROW(rv = CallRPC("getnewstealthaddress"));
-        std::string sSxAddr = StripQuotes(rv.write());
+        std::string sSxAddr = part::StripQuotes(rv.write());
 
         CBitcoinAddress address(sSxAddr);
 

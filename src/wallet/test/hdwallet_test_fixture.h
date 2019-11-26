@@ -21,7 +21,5 @@ struct HDWalletTestingSetup: public TestingSetup {
     std::shared_ptr<CHDWallet> pwalletMain;
 };
 
-std::string StripQuotes(std::string s);
-
 #endif // PARTICL_WALLET_TEST_HDWALLET_TEST_FIXTURE_H
 

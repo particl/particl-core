@@ -19,6 +19,8 @@
 #include <timedata.h>
 #include <anon.h>
 #include <validationinterface.h>
+#include <util/string.h>
+#include <util/time.h>
 
 #include <leveldb/db.h>
 

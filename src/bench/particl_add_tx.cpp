@@ -11,53 +11,11 @@
 #include <validation.h>
 #include <blind.h>
 #include <rpc/rpcutil.h>
+#include <rpc/blockchain.h>
 #include <timedata.h>
 #include <miner.h>
 #include <pos/miner.h>
-
-struct TimingTestingSetup: public TestingSetup {
-    TimingTestingSetup(const std::string& chainName = CBaseChainParams::REGTEST):
-        TestingSetup(chainName, true)
-    {
-        ECC_Start_Stealth();
-        ECC_Start_Blinding();
-
-        m_chain_client->registerRpcs();
-    }
-
-    ~TimingTestingSetup()
-    {
-        ECC_Stop_Stealth();
-        ECC_Stop_Blinding();
-    }
-
-    std::unique_ptr<interfaces::Chain> m_chain = interfaces::MakeChain(m_node);
-    std::unique_ptr<interfaces::ChainClient> m_chain_client = interfaces::MakeWalletClient(*m_chain, {});
-};
-
-std::string StripQuotes(std::string s)
-{
-    // Strip double quotes from start and/or end of string
-    size_t len = s.length();
-    if (len < 2) {
-        if (len > 0 && s[0] == '"') {
-            s = s.substr(1, len - 1);
-        }
-        return s;
-    }
-
-    if (s[0] == '"') {
-        if (s[len-1] == '"') {
-            s = s.substr(1, len - 2);
-        } else {
-            s = s.substr(1, len - 1);
-        }
-    } else
-    if (s[len-1] == '"') {
-        s = s.substr(0, len - 2);
-    }
-    return s;
-};
+#include <util/string.h>
 
 CTransactionRef CreateTxn(CHDWallet *pwallet, CBitcoinAddress &address, CAmount amount, int type_in, int type_out, int nRingSize = 5)
 {
@@ -81,19 +39,13 @@ CTransactionRef CreateTxn(CHDWallet *pwallet, CBitcoinAddress &address, CAmount 
     CAmount nFee;
     CCoinControl coinControl;
     if (type_in == OUTPUT_STANDARD) {
-        int result = pwallet->AddStandardInputs(*locked_chain, wtx, rtx, vecSend, true, nFee, &coinControl, sError);
-        std::cout << sError << std::endl;
-        assert(0 == result);
+        assert(0 == pwallet->AddStandardInputs(*locked_chain, wtx, rtx, vecSend, true, nFee, &coinControl, sError));
     } else
     if (type_in == OUTPUT_CT) {
-        int result = pwallet->AddBlindedInputs(*locked_chain, wtx, rtx, vecSend, true, nFee, &coinControl, sError);
-        std::cout << sError << std::endl;
-        assert(0 == result);
+        assert(0 == pwallet->AddBlindedInputs(*locked_chain, wtx, rtx, vecSend, true, nFee, &coinControl, sError));
     } else {
         int nInputsPerSig = 1;
-        int result = pwallet->AddAnonInputs(*locked_chain, wtx, rtx, vecSend, true, nRingSize, nInputsPerSig, nFee, &coinControl, sError);
-        std::cout << sError << std::endl;
-        assert(0 == result);
+        assert(0 == pwallet->AddAnonInputs(*locked_chain, wtx, rtx, vecSend, true, nRingSize, nInputsPerSig, nFee, &coinControl, sError));
     }
     return wtx.tx;
 }
@@ -166,24 +118,28 @@ void StakeNBlocks(CHDWallet *pwallet, size_t nBlocks)
     SyncWithValidationInterfaceQueue();
 };
 
-static void WalletTiming(benchmark::State& state, const std::string type, const bool owned)
+static void AddTx(benchmark::State& state, const std::string from, const std::string to, const bool owned)
 {
-    TimingTestingSetup test{};
+    ECC_Start_Stealth();
+    ECC_Start_Blinding();
+ 
+    std::unique_ptr<interfaces::Chain> m_chain = interfaces::MakeChain(*g_rpc_node);
+    std::unique_ptr<interfaces::ChainClient> m_chain_client = interfaces::MakeWalletClient(*m_chain, {});
+    m_chain_client->registerRpcs();
     
-    uint64_t wallet_creation_flags = 0;
+    uint64_t wallet_creation_flags = WALLET_FLAG_BLANK_WALLET;
     SecureString passphrase;
     std::string error;
     std::vector<std::string> warnings;
 
     WalletLocation location_a("a");
-    std::shared_ptr<CHDWallet> pwallet_a = std::static_pointer_cast<CHDWallet>(CWallet::CreateWalletFromFile(*test.m_chain.get(), location_a, error, warnings, wallet_creation_flags));
-    std::cout << error << std::endl;
+    std::shared_ptr<CHDWallet> pwallet_a = std::static_pointer_cast<CHDWallet>(CWallet::CreateWalletFromFile(*m_chain.get(), location_a, error, warnings, wallet_creation_flags));
     assert(pwallet_a.get());
     pwallet_a->Initialise();
     AddWallet(pwallet_a);
 
     WalletLocation location_b("b");
-    std::shared_ptr<CHDWallet> pwallet_b = std::static_pointer_cast<CHDWallet>(CWallet::CreateWalletFromFile(*test.m_chain.get(), location_b, error, warnings, wallet_creation_flags));
+    std::shared_ptr<CHDWallet> pwallet_b = std::static_pointer_cast<CHDWallet>(CWallet::CreateWalletFromFile(*m_chain.get(), location_b, error, warnings, wallet_creation_flags));
     assert(pwallet_b.get());
     pwallet_b->Initialise();
     AddWallet(pwallet_b);
@@ -198,10 +154,8 @@ static void WalletTiming(benchmark::State& state, const std::string type, const 
     }
 
     std::string from_address_type, to_address_type;
-    OutputTypes from_tx_type, to_tx_type;
-
-    std::string from = type.substr(0, type.find("->"));
-    std::string to = type.substr(type.find("->") + 2);
+    OutputTypes from_tx_type = OUTPUT_NULL;
+    OutputTypes to_tx_type = OUTPUT_NULL;
 
     UniValue rv;
 
@@ -229,12 +183,15 @@ static void WalletTiming(benchmark::State& state, const std::string type, const 
         to_address_type = "getnewstealthaddress";
         to_tx_type = OUTPUT_RINGCT;
     }
+
+    assert(from_tx_type != OUTPUT_NULL);
+    assert(to_tx_type != OUTPUT_NULL);
     
     rv = CallRPC(from_address_type, "a");
-    CBitcoinAddress addr_a(StripQuotes(rv.write()));
+    CBitcoinAddress addr_a(part::StripQuotes(rv.write()));
 
     rv = CallRPC(to_address_type, "b");
-    CBitcoinAddress addr_b(StripQuotes(rv.write()));
+    CBitcoinAddress addr_b(part::StripQuotes(rv.write()));
 
     if (from == "anon" || from == "blind") {
         AddAnonTxn(pwallet_a.get(), addr_a, 1 * COIN, from == "anon" ? OUTPUT_RINGCT : OUTPUT_CT);
@@ -261,48 +218,51 @@ static void WalletTiming(benchmark::State& state, const std::string type, const 
 
     RemoveWallet(pwallet_b);
     pwallet_b.reset();
+
+    ECC_Stop_Stealth();
+    ECC_Stop_Blinding();
 }
 
-static void WalletTimingPlainPlainNotOwned(benchmark::State& state) { WalletTiming(state, "plain->plain", false); }
-static void WalletTimingPlainPlainOwned(benchmark::State& state) { WalletTiming(state, "plain->plain", true); }
-static void WalletTimingPlainBlindNotOwned(benchmark::State& state) { WalletTiming(state, "plain->blind", false); }
-static void WalletTimingPlainBlindOwned(benchmark::State& state) { WalletTiming(state, "plain->blind", true); }
-static void WalletTimingPlainAnonNotOwned(benchmark::State& state) { WalletTiming(state, "plain->anon", false); }
-static void WalletTimingPlainAnonOwned(benchmark::State& state) { WalletTiming(state, "plain->anon", true); }
+static void ParticlAddTxPlainPlainNotOwned(benchmark::State& state) { AddTx(state, "plain", "plain", false); }
+static void ParticlAddTxPlainPlainOwned(benchmark::State& state) { AddTx(state, "plain", "plain", true); }
+static void ParticlAddTxPlainBlindNotOwned(benchmark::State& state) { AddTx(state, "plain", "blind", false); }
+static void ParticlAddTxPlainBlindOwned(benchmark::State& state) { AddTx(state, "plain", "blind", true); }
+// static void ParticlAddTxPlainAnonNotOwned(benchmark::State& state) { AddTx(state, "plain", "anon", false); }
+// static void ParticlAddTxPlainAnonOwned(benchmark::State& state) { AddTx(state, "plain", "anon", true); }
 
-static void WalletTimingBlindPlainNotOwned(benchmark::State& state) { WalletTiming(state, "blind->plain", false); }
-static void WalletTimingBlindPlainOwned(benchmark::State& state) { WalletTiming(state, "blind->plain", true); }
-static void WalletTimingBlindBlindNotOwned(benchmark::State& state) { WalletTiming(state, "blind->blind", false); }
-static void WalletTimingBlindBlindOwned(benchmark::State& state) { WalletTiming(state, "blind->blind", true); }
-static void WalletTimingBlindAnonNotOwned(benchmark::State& state) { WalletTiming(state, "blind->anon", false); }
-static void WalletTimingBlindAnonOwned(benchmark::State& state) { WalletTiming(state, "blind->anon", true); }
+static void ParticlAddTxBlindPlainNotOwned(benchmark::State& state) { AddTx(state, "blind", "plain", false); }
+static void ParticlAddTxBlindPlainOwned(benchmark::State& state) { AddTx(state, "blind", "plain", true); }
+static void ParticlAddTxBlindBlindNotOwned(benchmark::State& state) { AddTx(state, "blind", "blind", false); }
+static void ParticlAddTxBlindBlindOwned(benchmark::State& state) { AddTx(state, "blind", "blind", true); }
+static void ParticlAddTxBlindAnonNotOwned(benchmark::State& state) { AddTx(state, "blind", "anon", false); }
+static void ParticlAddTxBlindAnonOwned(benchmark::State& state) { AddTx(state, "blind", "anon", true); }
 
-static void WalletTimingAnonPlainNotOwned(benchmark::State& state) { WalletTiming(state, "anon->plain", false); }
-static void WalletTimingAnonPlainOwned(benchmark::State& state) { WalletTiming(state, "anon->plain", true); }
-static void WalletTimingAnonBlindNotOwned(benchmark::State& state) { WalletTiming(state, "anon->blind", false); }
-static void WalletTimingAnonBlindOwned(benchmark::State& state) { WalletTiming(state, "anon->blind", true); }
-static void WalletTimingAnonAnonNotOwned(benchmark::State& state) { WalletTiming(state, "anon->anon", false); }
-static void WalletTimingAnonAnonOwned(benchmark::State& state) { WalletTiming(state, "anon->anon", true); }
-
-
-BENCHMARK(WalletTimingPlainPlainNotOwned, 100);
-BENCHMARK(WalletTimingPlainPlainOwned, 100);
-BENCHMARK(WalletTimingPlainBlindNotOwned, 100);
-BENCHMARK(WalletTimingPlainBlindOwned, 100);
-// BENCHMARK(WalletTimingPlainAnonNotOwned, 100);
-// BENCHMARK(WalletTimingPlainAnonOwned, 100);
-
-BENCHMARK(WalletTimingBlindPlainNotOwned, 100);
-BENCHMARK(WalletTimingBlindPlainOwned, 100);
-BENCHMARK(WalletTimingBlindBlindNotOwned, 100);
-BENCHMARK(WalletTimingBlindBlindOwned, 100);
-BENCHMARK(WalletTimingBlindAnonNotOwned, 100);
-BENCHMARK(WalletTimingBlindAnonOwned, 100);
+static void ParticlAddTxAnonPlainNotOwned(benchmark::State& state) { AddTx(state, "anon", "plain", false); }
+static void ParticlAddTxAnonPlainOwned(benchmark::State& state) { AddTx(state, "anon", "plain", true); }
+static void ParticlAddTxAnonBlindNotOwned(benchmark::State& state) { AddTx(state, "anon", "blind", false); }
+static void ParticlAddTxAnonBlindOwned(benchmark::State& state) { AddTx(state, "anon", "blind", true); }
+static void ParticlAddTxAnonAnonNotOwned(benchmark::State& state) { AddTx(state, "anon", "anon", false); }
+static void ParticlAddTxAnonAnonOwned(benchmark::State& state) { AddTx(state, "anon", "anon", true); }
 
 
-BENCHMARK(WalletTimingAnonPlainNotOwned, 100);
-BENCHMARK(WalletTimingAnonPlainOwned, 100);
-BENCHMARK(WalletTimingAnonBlindNotOwned, 100);
-BENCHMARK(WalletTimingAnonBlindOwned, 100);
-BENCHMARK(WalletTimingAnonAnonNotOwned, 100);
-BENCHMARK(WalletTimingAnonAnonOwned, 100);
+BENCHMARK(ParticlAddTxPlainPlainNotOwned, 100);
+BENCHMARK(ParticlAddTxPlainPlainOwned, 100);
+BENCHMARK(ParticlAddTxPlainBlindNotOwned, 100);
+BENCHMARK(ParticlAddTxPlainBlindOwned, 100);
+// BENCHMARK(ParticlAddTxPlainAnonNotOwned, 100);
+// BENCHMARK(ParticlAddTxPlainAnonOwned, 100);
+
+BENCHMARK(ParticlAddTxBlindPlainNotOwned, 100);
+BENCHMARK(ParticlAddTxBlindPlainOwned, 100);
+BENCHMARK(ParticlAddTxBlindBlindNotOwned, 100);
+BENCHMARK(ParticlAddTxBlindBlindOwned, 100);
+BENCHMARK(ParticlAddTxBlindAnonNotOwned, 100);
+BENCHMARK(ParticlAddTxBlindAnonOwned, 100);
+
+
+BENCHMARK(ParticlAddTxAnonPlainNotOwned, 100);
+BENCHMARK(ParticlAddTxAnonPlainOwned, 100);
+BENCHMARK(ParticlAddTxAnonBlindNotOwned, 100);
+BENCHMARK(ParticlAddTxAnonBlindOwned, 100);
+BENCHMARK(ParticlAddTxAnonAnonNotOwned, 100);
+BENCHMARK(ParticlAddTxAnonAnonOwned, 100);

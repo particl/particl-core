@@ -137,3 +137,16 @@ int64_t ParseISO8601DateTime(const std::string& str)
         return 0;
     return (ptime - epoch).total_seconds();
 }
+
+namespace part
+{
+std::string GetTimeString(int64_t timestamp, char *buffer, size_t nBuffer)
+{
+    struct tm* dt;
+    time_t t = timestamp;
+    dt = localtime(&t);
+
+    strftime(buffer, nBuffer, "%Y-%m-%dT%H:%M:%S%z", dt); // %Z shows long strings on windows
+    return std::string(buffer); // copies the null-terminated character sequence
+};
+}

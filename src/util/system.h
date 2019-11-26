@@ -122,28 +122,6 @@ inline bool IsSwitchChar(char c)
 #endif
 }
 
-namespace part
-{
-    void *memrchr(const void *s, int c, size_t n);
-
-    int memcmp_nta(const void *cs, const void *ct, size_t count);
-
-    void ReplaceStrInPlace(std::string &subject, const std::string search, const std::string replace);
-    bool IsStringBoolPositive(const std::string &value);
-    bool IsStringBoolNegative(const std::string &value);
-    bool GetStringBool(const std::string &value, bool &fOut);
-    bool IsStrOnlyDigits(const std::string &s);
-    std::string GetTimeString(int64_t timestamp, char *buffer, size_t nBuffer);
-    std::string BytesReadable(uint64_t nBytes);
-    bool stringsMatchI(const std::string &sString, const std::string &sFind, int type);
-    std::string &TrimQuotes(std::string &s);
-    std::string &LTrimWhitespace(std::string &s);
-    std::string &RTrimWhitespace(std::string &s);
-    std::string &TrimWhitespace(std::string &s);
-    int64_t strToEpoch(const char *input, bool fFillMax=false);
-    bool endsWith(const std::string &str, const std::string &suffix);
-}
-
 enum class OptionsCategory {
     OPTIONS,
     CONNECTION,

@@ -19,7 +19,7 @@
 #include <key_io.h>
 #include <policy/policy.h>
 #include <script/script.h>
-#include <util/system.h>
+#include <util/string.h>
 #include <validation.h>
 #include <wallet/ismine.h>
 

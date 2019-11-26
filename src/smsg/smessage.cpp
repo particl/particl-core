@@ -44,6 +44,7 @@ Notes:
 #include <streams.h>
 #include <univalue.h>
 #include <node/context.h>
+#include <util/string.h>
 
 #ifdef ENABLE_WALLET
 #include <wallet/coincontrol.h>
