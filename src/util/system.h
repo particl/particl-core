@@ -40,7 +40,6 @@
 int64_t GetStartupTime();
 
 extern bool fParticlMode;
-extern bool fParticlWallet;
 
 extern const char * const BITCOIN_CONF_FILENAME;
 
