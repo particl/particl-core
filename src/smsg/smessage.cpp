@@ -268,8 +268,6 @@ void ThreadSecureMsg()
 
         for (std::vector<std::pair<int64_t, NodeId> >::iterator it(vTimedOutLocks.begin()); it != vTimedOutLocks.end(); it++) {
             NodeId nPeerId = it->second;
-            uint32_t fExists = 0;
-
             LogPrint(BCLog::SMSG, "Lock on bucket %d for peer %d timed out.\n", it->first, nPeerId);
 
             // Look through the nodes for the peer that locked this bucket
@@ -280,8 +278,6 @@ void ThreadSecureMsg()
                     if (pnode->GetId() != nPeerId) {
                         continue;
                     }
-
-                    fExists = 1; //found in g_connman->vNodes
 
                     LOCK(pnode->smsgData.cs_smsg_net);
                     int64_t ignoreUntil = GetTime() + SMSG_TIME_IGNORE;

@@ -456,7 +456,6 @@ public:
         CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
 
         gArgs.ForceSetArg("-btcmode", "1");
-        fParticlWallet = false;
 
         wallet = MakeUnique<CWallet>(m_chain.get(), WalletLocation(), WalletDatabase::CreateMock());
         {

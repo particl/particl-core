@@ -1481,8 +1481,6 @@ bool CHDWallet::AddressBookChangedNotify(const CTxDestination &address, ChangeTy
 
 DBErrors CHDWallet::LoadWallet(bool& fFirstRunRet)
 {
-    fParticlWallet = true;
-
     if (!ParseMoney(gArgs.GetArg("-reservebalance", ""), nReserveBalance)) {
         InitError(_("Invalid amount for -reservebalance=<amount>").translated);
         return DBErrors::LOAD_FAIL;
@@ -8354,10 +8352,6 @@ bool CHDWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const s
                                 int& nChangePosInOut, std::string& strFailReason, const CCoinControl& coin_control, bool sign)
 {
     WalletLogPrintf("CHDWallet %s\n", __func__);
-
-    if (!fParticlWallet) {
-        return CWallet::CreateTransaction(locked_chain, vecSend, tx, nFeeRet, nChangePosInOut, strFailReason, coin_control, sign);
-    }
 
     std::vector<CTempRecipient> vecSendB;
     for (const auto &rec : vecSend) {

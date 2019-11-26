@@ -845,11 +845,11 @@ static UniValue getreceivedbyaddress(const JSONRPCRequest& request)
     for (const std::pair<const uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
         const CWalletTx& wtx = pairWtx.second;
 
-        if ((!fParticlWallet && wtx.IsCoinBase()) || !locked_chain->checkFinalTx(*wtx.tx)) {
+        if ((!pwallet->IsParticlWallet() && wtx.IsCoinBase()) || !locked_chain->checkFinalTx(*wtx.tx)) {
             continue;
         }
 
-        if (fParticlWallet) {
+        if (pwallet->IsParticlWallet()) {
             for (auto &txout : wtx.tx->vpout) {
                 if (txout->IsStandardOutput()
                     && *txout->GetPScriptPubKey() == scriptPubKey) {
@@ -919,11 +919,11 @@ static UniValue getreceivedbylabel(const JSONRPCRequest& request)
     CAmount nAmount = 0;
     for (const std::pair<const uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
         const CWalletTx& wtx = pairWtx.second;
-        if ((!fParticlWallet && wtx.IsCoinBase()) || !locked_chain->checkFinalTx(*wtx.tx)) {
+        if ((!pwallet->IsParticlWallet() && wtx.IsCoinBase()) || !locked_chain->checkFinalTx(*wtx.tx)) {
             continue;
         }
 
-        if (fParticlWallet) {
+        if (pwallet->IsParticlWallet()) {
             for (auto &txout : wtx.tx->vpout) {
                 CTxDestination address;
                 if (txout->IsStandardOutput()
@@ -1679,7 +1679,7 @@ static void ListTransactions(interfaces::Chain::Lock& locked_chain, CWallet* con
                 entry.pushKV("involvesWatchonly", true);
             }
 
-            if (fParticlWallet
+            if (pwallet->IsParticlWallet()
                 && r.destination.type() == typeid(PKHash)) {
                 CStealthAddress sx;
                 CKeyID idK = CKeyID(boost::get<PKHash>(r.destination));
@@ -3155,7 +3155,7 @@ static UniValue getwalletinfo(const JSONRPCRequest& request)
     obj.pushKV("walletname", pwallet->GetName());
     obj.pushKV("walletversion", pwallet->GetVersion());
 
-    if (fParticlWallet) {
+    if (pwallet->IsParticlWallet()) {
         CHDWalletBalances bal;
         ((CHDWallet*)pwallet)->GetBalances(bal);
 
@@ -3190,7 +3190,7 @@ static UniValue getwalletinfo(const JSONRPCRequest& request)
         obj.pushKV("immature_balance", ValueFromAmount(bal.m_mine_immature));
     }
 
-    int nTxCount = (int)pwallet->mapWallet.size() + (fParticlWallet ? (int)((CHDWallet*)pwallet)->mapRecords.size() : 0);
+    int nTxCount = (int)pwallet->mapWallet.size() + (pwallet->IsParticlWallet() ? (int)((CHDWallet*)pwallet)->mapRecords.size() : 0);
     obj.pushKV("txcount",       (int)nTxCount);
 
     CKeyID seed_id;
@@ -3746,7 +3746,7 @@ static UniValue listunspent(const JSONRPCRequest& request)
         CAmount nValue;
         CTxDestination address;
         const CScript *scriptPubKey;
-        if (fParticlWallet) {
+        if (pwallet->IsParticlWallet()) {
             scriptPubKey = out.tx->tx->vpout[out.i]->GetPScriptPubKey();
             nValue = out.tx->tx->vpout[out.i]->GetValue();
         } else {

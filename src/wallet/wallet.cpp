@@ -1994,8 +1994,9 @@ CAmount CWalletTx::GetAvailableCredit(bool fUseCache, const isminefilter& filter
     for (unsigned int i = 0; i < tx->GetNumVOuts(); i++)
     {
         if (!pwallet->IsSpent(hashTx, i) && (allow_used_addresses || !pwallet->IsUsedDestination(hashTx, i))) {
-            nCredit += fParticlWallet ? pwallet->GetCredit(tx->vpout[i].get(), filter)
-                                      : pwallet->GetCredit(tx->vout[i], filter);
+            nCredit += pwallet->IsParticlWallet()
+                       ? pwallet->GetCredit(tx->vpout[i].get(), filter)
+                       : pwallet->GetCredit(tx->vout[i], filter);
             if (!MoneyRange(nCredit))
                 throw std::runtime_error(std::string(__func__) + " : value out of range");
         }

@@ -2069,7 +2069,7 @@ bool AppInitMain(NodeContext& node)
 
     // ********************************************************* Step 12.5: start staking
 #ifdef ENABLE_WALLET
-    if (fParticlWallet) {
+    if (fParticlMode && GetWallets().size() > 0) {
         StartThreadStakeMiner();
     }
 #endif
