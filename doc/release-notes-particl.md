@@ -2,6 +2,7 @@ Next Major Version
 ==============
 
 - Added Czech bip39 wordlist.
+- No default account wallet warning is silenced if wallet was intentionally created empty.
 
 
 0.19.0.1
