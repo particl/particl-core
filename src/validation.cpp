@@ -146,9 +146,6 @@ CFeeRate minRelayTxFee = CFeeRate(DEFAULT_MIN_RELAY_TX_FEE);
 CBlockPolicyEstimator feeEstimator;
 CTxMemPool mempool(&feeEstimator);
 
-/** Constant stuff for coinbase transactions we create: */
-CScript COINBASE_FLAGS;
-
 // Internal stuff
 namespace {
     CBlockIndex* pindexBestInvalid = nullptr;
@@ -1709,8 +1706,9 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
         txundo.vprevout.reserve(tx.vin.size());
         for (const CTxIn &txin : tx.vin)
         {
-            if (txin.IsAnonInput())
+            if (txin.IsAnonInput()) {
                 continue;
+            }
 
             txundo.vprevout.emplace_back();
             bool is_spent = inputs.SpendCoin(txin.prevout, &txundo.vprevout.back());
@@ -3248,15 +3246,12 @@ bool FlushView(CCoinsViewCache *view, BlockValidationState& state, bool fDisconn
         for (auto &it : view->keyImages) {
             batch.Write(std::make_pair(DB_RCTKEYIMAGE, it.first), it.second);
         }
-
         for (auto &it : view->anonOutputs) {
             batch.Write(std::make_pair(DB_RCTOUTPUT, it.first), it.second);
         }
-
         for (auto &it : view->anonOutputLinks) {
             batch.Write(std::make_pair(DB_RCTOUTPUT_LINK, it.first), it.second);
         }
-
         if (!pblocktree->WriteBatch(batch)) {
             return error("%s: Write RCT outputs failed.", __func__);
         }

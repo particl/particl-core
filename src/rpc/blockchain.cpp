@@ -15,6 +15,7 @@
 #include <hash.h>
 #include <index/blockfilterindex.h>
 #include <node/coinstats.h>
+#include <node/context.h>
 #include <node/utxo_snapshot.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
@@ -54,6 +55,15 @@ struct CUpdatedBlock
 static Mutex cs_blockchange;
 static std::condition_variable cond_blockchange;
 static CUpdatedBlock latestblock;
+
+CTxMemPool& EnsureMemPool()
+{
+    CHECK_NONFATAL(g_rpc_node);
+    if (!g_rpc_node->mempool) {
+        throw JSONRPCError(RPC_CLIENT_MEMPOOL_DISABLED, "Mempool disabled or instance not found");
+    }
+    return *g_rpc_node->mempool;
+}
 
 /* Calculate the difficulty for a given block index.
  */
@@ -170,11 +180,12 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
         uint256 kernelhash, kernelblockhash;
         CAmount kernelvalue;
         CScript kernelscript;
-        GetKernelInfo(blockindex, *block.vtx[0], kernelhash, kernelvalue, kernelscript, kernelblockhash);
-        result.pushKV("hashproofofstake", kernelhash.GetHex());
-        result.pushKV("stakekernelvalue", ValueFromAmount(kernelvalue));
-        result.pushKV("stakekernelscript", HexStr(kernelscript.begin(), kernelscript.end()));
-        result.pushKV("stakekernelblockhash", kernelblockhash.GetHex());
+        if (GetKernelInfo(blockindex, *block.vtx[0], kernelhash, kernelvalue, kernelscript, kernelblockhash)) {
+            result.pushKV("hashproofofstake", kernelhash.GetHex());
+            result.pushKV("stakekernelvalue", ValueFromAmount(kernelvalue));
+            result.pushKV("stakekernelscript", HexStr(kernelscript.begin(), kernelscript.end()));
+            result.pushKV("stakekernelblockhash", kernelblockhash.GetHex());
+        }
     }
     return result;
 }

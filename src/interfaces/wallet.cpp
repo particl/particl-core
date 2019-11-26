@@ -18,8 +18,9 @@
 #include <wallet/feebumper.h>
 #include <wallet/fees.h>
 #include <wallet/ismine.h>
-#include <wallet/rpcwallet.h>
 #include <wallet/load.h>
+#include <wallet/psbtwallet.h>
+#include <wallet/rpcwallet.h>
 #include <wallet/wallet.h>
 
 #include <memory>
@@ -215,8 +216,22 @@ public:
         std::string error;
         return m_wallet->GetNewDestination(type, label, dest, error);
     }
-    bool getPubKey(const CKeyID& address, CPubKey& pub_key) override { return m_wallet->GetLegacyScriptPubKeyMan()->GetPubKey(address, pub_key); }
-    bool getPrivKey(const CKeyID& address, CKey& key) override { return m_wallet->GetLegacyScriptPubKeyMan()->GetKey(address, key); }
+    bool getPubKey(const CScript& script, const CKeyID& address, CPubKey& pub_key) override
+    {
+        const SigningProvider* provider = m_wallet->GetSigningProvider(script);
+        if (provider) {
+            return provider->GetPubKey(address, pub_key);
+        }
+        return false;
+    }
+    bool getPrivKey(const CScript& script, const CKeyID& address, CKey& key) override
+    {
+        const SigningProvider* provider = m_wallet->GetSigningProvider(script);
+        if (provider) {
+            return provider->GetKey(address, key);
+        }
+        return false;
+    }
     bool isSpendable(const CTxDestination& dest) override { return m_wallet->IsMine(dest) & ISMINE_SPENDABLE; }
     bool haveWatchOnly() override
     {
@@ -474,6 +489,14 @@ public:
             }
         }
         return {};
+    }
+    TransactionError fillPSBT(PartiallySignedTransaction& psbtx,
+        bool& complete,
+        int sighash_type = 1 /* SIGHASH_ALL */,
+        bool sign = true,
+        bool bip32derivs = false) override
+    {
+        return FillPSBT(m_wallet.get(), psbtx, complete, sighash_type, sign, bip32derivs);
     }
     WalletBalances getBalances() override
     {

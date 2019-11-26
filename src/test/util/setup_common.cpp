@@ -113,7 +113,6 @@ TestingSetup::TestingSetup(const std::string& chainName, bool fParticlModeIn) : 
     threadGroup.create_thread(std::bind(&CScheduler::serviceQueue, &scheduler));
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
 
-    mempool.setSanityCheck(1.0);
     pblocktree.reset(new CBlockTreeDB(1 << 20, true));
     g_chainstate = MakeUnique<CChainState>();
     ::ChainstateActive().InitCoinsDB(
@@ -137,6 +136,8 @@ TestingSetup::TestingSetup(const std::string& chainName, bool fParticlModeIn) : 
     }
     g_parallel_script_checks = true;
 
+    m_node.mempool = &::mempool;
+    m_node.mempool->setSanityCheck(1.0);
     m_node.banman = MakeUnique<BanMan>(GetDataDir() / "banlist.dat", nullptr, DEFAULT_MISBEHAVING_BANTIME);
     m_node.connman = MakeUnique<CConnman>(0x1337, 0x1337); // Deterministic randomness for tests.
 }
@@ -150,6 +151,7 @@ TestingSetup::~TestingSetup()
     g_rpc_node = nullptr;
     m_node.connman.reset();
     m_node.banman.reset();
+    m_node.mempool = nullptr;
     UnloadBlockIndex();
     g_chainstate.reset();
     pblocktree.reset();

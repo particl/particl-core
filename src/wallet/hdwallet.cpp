@@ -277,7 +277,7 @@ bool CHDWallet::Initialise()
             */
         }
     }
-    if (idDefaultAccount.IsNull()) {
+    if (!IsWalletFlagSet(WALLET_FLAG_BLANK_WALLET) && idDefaultAccount.IsNull()) {
         std::string sWarning = "Warning: Wallet " + GetName() + " has no active account, please view the readme.";
         #ifndef ENABLE_QT
         tfm::format(std::cout, "%s\n", sWarning.c_str());
@@ -2002,7 +2002,7 @@ isminetype CHDWallet::IsMine(const CScript &scriptPubKey, CKeyID &keyID,
         else
             return ISMINE_NO;
         CScript subscript;
-        const SigningProvider* provider = GetSigningProvider();
+        const SigningProvider* provider = GetSigningProvider(subscript);
         if (provider->GetCScript(scriptID, subscript)) {
             isminetype ret = m_spk_man->IsMine(subscript, isInvalid);
             if (ret == ISMINE_SPENDABLE || ret == ISMINE_WATCH_ONLY_ || (ret == ISMINE_NO && isInvalid))
@@ -3896,7 +3896,8 @@ int CHDWallet::AddStandardInputs(interfaces::Chain::Lock& locked_chain, CWalletT
 
             // Fill in dummy signatures for fee calculation.
             int nIn = 0;
-            const SigningProvider *provider = GetSigningProvider();
+            CScript script;
+            const SigningProvider *provider = GetSigningProvider(script);
             for (const auto &coin : setCoins) {
                 const CScript& scriptPubKey = coin.txout.scriptPubKey;
                 SignatureData sigdata;
@@ -4019,7 +4020,8 @@ int CHDWallet::AddStandardInputs(interfaces::Chain::Lock& locked_chain, CWalletT
         }
 
         if (sign) {
-            const SigningProvider *provider = GetSigningProvider();
+            CScript script;
+            const SigningProvider *provider = GetSigningProvider(script);
             int nIn = 0;
             for (const auto &coin : setCoins) {
                 const CScript& scriptPubKey = coin.txout.scriptPubKey;
@@ -4414,7 +4416,8 @@ int CHDWallet::AddBlindedInputs(interfaces::Chain::Lock& locked_chain, CWalletTx
             }
 
             // Fill in dummy signatures for fee calculation.
-            const SigningProvider *provider = GetSigningProvider();
+            CScript script;
+            const SigningProvider *provider = GetSigningProvider(script);
             int nIn = 0;
             for (const auto &coin : setCoins) {
                 const uint256 &txhash = coin.first->first;
@@ -4627,7 +4630,8 @@ int CHDWallet::AddBlindedInputs(interfaces::Chain::Lock& locked_chain, CWalletTx
         }
 
         if (sign) {
-            const SigningProvider *provider = GetSigningProvider();
+            CScript script;
+            const SigningProvider *provider = GetSigningProvider(script);
             int nIn = 0;
             for (const auto &coin : setCoins) {
                 const uint256 &txhash = coin.first->first;
@@ -8293,7 +8297,8 @@ bool CHDWallet::SignTransaction(CMutableTransaction &tx)
     AssertLockHeld(cs_wallet); // mapWallet
 
     // sign the new tx
-    const SigningProvider *provider = GetSigningProvider();
+    CScript script;
+    const SigningProvider *provider = GetSigningProvider(script);
     int nIn = 0;
     for (auto& input : tx.vin) {
         CScript scriptPubKey;
@@ -8481,9 +8486,9 @@ bool CHDWallet::CommitTransaction(CWalletTx &wtxNew, CTransactionRecord &rtx, Tx
 // Helper for producing a max-sized low-S signature (eg 72 bytes)
 bool CHDWallet::DummySignInput(CTxIn &tx_in, const CTxOut &txout, bool use_max_sig) const
 {
-    const SigningProvider *provider = GetSigningProvider();
     // Fill in dummy signatures for fee calculation.
     const CScript &scriptPubKey = txout.scriptPubKey;
+    const SigningProvider *provider = GetSigningProvider(scriptPubKey);
     SignatureData sigdata;
 
     if (!ProduceSignature(*provider, DUMMY_SIGNATURE_CREATOR_PARTICL, scriptPubKey, sigdata)) {
@@ -8496,12 +8501,12 @@ bool CHDWallet::DummySignInput(CTxIn &tx_in, const CTxOut &txout, bool use_max_s
 
 bool CHDWallet::DummySignInput(CTxIn &tx_in, const CTxOutBaseRef &txout) const
 {
-    const SigningProvider *provider = GetSigningProvider();
     // Fill in dummy signatures for fee calculation.
     if (!txout->GetPScriptPubKey()) {
         return werror("%s: Bad output type\n", __func__);
     }
     const CScript &scriptPubKey = *txout->GetPScriptPubKey();
+    const SigningProvider *provider = GetSigningProvider(scriptPubKey);
     SignatureData sigdata;
 
     if (!ProduceSignature(*provider, DUMMY_SIGNATURE_CREATOR_PARTICL, scriptPubKey, sigdata)) {
@@ -12893,13 +12898,13 @@ bool CHDWallet::CreateCoinStake(unsigned int nBits, int64_t nTime, int nBlockHei
 
 
     // Sign
-    const SigningProvider *provider = GetSigningProvider();
     int nIn = 0;
     for (const auto &pcoin : vwtxPrev) {
         uint32_t nPrev = txNew.vin[nIn].prevout.n;
 
         CTxOutStandard *prevOut = (CTxOutStandard*)pcoin->tx->vpout[nPrev].get();
         CScript &scriptPubKeyOut = prevOut->scriptPubKey;
+        const SigningProvider *provider = GetSigningProvider(scriptPubKeyOut);
         std::vector<uint8_t> vchAmount;
         prevOut->PutValue(vchAmount);
 
