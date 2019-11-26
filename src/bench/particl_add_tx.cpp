@@ -122,11 +122,11 @@ static void AddTx(benchmark::State& state, const std::string from, const std::st
 {
     ECC_Start_Stealth();
     ECC_Start_Blinding();
- 
+
     std::unique_ptr<interfaces::Chain> m_chain = interfaces::MakeChain(*g_rpc_node);
     std::unique_ptr<interfaces::ChainClient> m_chain_client = interfaces::MakeWalletClient(*m_chain, {});
     m_chain_client->registerRpcs();
-    
+
     uint64_t wallet_creation_flags = WALLET_FLAG_BLANK_WALLET;
     SecureString passphrase;
     std::string error;
@@ -186,7 +186,7 @@ static void AddTx(benchmark::State& state, const std::string from, const std::st
 
     assert(from_tx_type != OUTPUT_NULL);
     assert(to_tx_type != OUTPUT_NULL);
-    
+
     rv = CallRPC(from_address_type, "a");
     CBitcoinAddress addr_a(part::StripQuotes(rv.write()));
 
@@ -204,7 +204,7 @@ static void AddTx(benchmark::State& state, const std::string from, const std::st
     }
 
     CTransactionRef tx = CreateTxn(pwallet_a.get(), owned ? addr_b : addr_a, 1000, from_tx_type, to_tx_type);
-    
+
     CWalletTx::Confirmation confirm;
     LOCK(cs_main);
     LOCK(pwallet_b.get()->cs_wallet);
@@ -244,7 +244,6 @@ static void ParticlAddTxAnonBlindOwned(benchmark::State& state) { AddTx(state, "
 static void ParticlAddTxAnonAnonNotOwned(benchmark::State& state) { AddTx(state, "anon", "anon", false); }
 static void ParticlAddTxAnonAnonOwned(benchmark::State& state) { AddTx(state, "anon", "anon", true); }
 
-
 BENCHMARK(ParticlAddTxPlainPlainNotOwned, 100);
 BENCHMARK(ParticlAddTxPlainPlainOwned, 100);
 BENCHMARK(ParticlAddTxPlainBlindNotOwned, 100);
@@ -258,7 +257,6 @@ BENCHMARK(ParticlAddTxBlindBlindNotOwned, 100);
 BENCHMARK(ParticlAddTxBlindBlindOwned, 100);
 BENCHMARK(ParticlAddTxBlindAnonNotOwned, 100);
 BENCHMARK(ParticlAddTxBlindAnonOwned, 100);
-
 
 BENCHMARK(ParticlAddTxAnonPlainNotOwned, 100);
 BENCHMARK(ParticlAddTxAnonPlainOwned, 100);
