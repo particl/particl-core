@@ -69,6 +69,8 @@ private Q_SLOTS:
     void onCopyLabelAction();
     /** Edit currently selected address entry (no button) */
     void onEditAction();
+    /** Verify currently selected address entry on a hardware device */
+    void onVerifyAddressOnHWAction();
     /** Export button clicked */
     void on_exportButton_clicked();
 
