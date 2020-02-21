@@ -344,7 +344,7 @@ static UniValue getdevicepublickey(const JSONRPCRequest &request)
 
     std::string sError;
     CPubKey pk;
-    if (0 != pDevice->GetPubKey(vPath, pk, sError)) {
+    if (0 != pDevice->GetPubKey(vPath, pk, true, sError)) {
         throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("GetPubKey failed %s.", sError));
     }
 
@@ -548,7 +548,7 @@ static UniValue devicesignrawtransaction(const JSONRPCRequest &request)
             GetPath(pathkey.vPath, paths[idx], request.params[4]);
 
             std::string sError;
-            if (0 != pDevice->GetPubKey(pathkey.vPath, pathkey.pk, sError)) {
+            if (0 != pDevice->GetPubKey(pathkey.vPath, pathkey.pk, false, sError)) {
                 throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Device GetPubKey failed %s.", sError));
             }
 
@@ -1092,7 +1092,7 @@ static UniValue devicegetnewstealthaddress(const JSONRPCRequest &request)
         usb_device::CUSBDevice *pDevice = SelectDevice(vDevices);
 
         CPubKey pkSpend;
-        if (0 != pDevice->GetPubKey(vSpendPath, pkSpend, sError)) {
+        if (0 != pDevice->GetPubKey(vSpendPath, pkSpend, false, sError)) {
             throw JSONRPCError(RPC_INTERNAL_ERROR, strprintf("Device GetPubKey failed %s.", sError));
         }
 

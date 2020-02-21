@@ -42,7 +42,7 @@ int CDebugDevice::GetInfo(UniValue &info, std::string &sError)
     return 0;
 };
 
-int CDebugDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError)
+int CDebugDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, bool display, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
         return errorN(1, sError, __func__, "Path depth out of range.");

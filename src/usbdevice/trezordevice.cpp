@@ -295,7 +295,7 @@ int CTrezorDevice::GetInfo(UniValue& info, std::string& sError)
     return 0;
 };
 
-int CTrezorDevice::GetPubKey(const std::vector<uint32_t>& vPath, CPubKey& pk, std::string& sError)
+int CTrezorDevice::GetPubKey(const std::vector<uint32_t>& vPath, CPubKey& pk, bool display, std::string& sError)
 {
     hw::trezor::messages::bitcoin::GetPublicKey msg_in;
     hw::trezor::messages::bitcoin::PublicKey msg_out;

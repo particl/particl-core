@@ -121,7 +121,7 @@ public:
     virtual int GetFirmwareVersion(std::string &sFirmware, std::string &sError);
     virtual int GetInfo(UniValue &info, std::string &sError);
 
-    virtual int GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError) { return 0; };
+    virtual int GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, bool display, std::string &sError) { return 0; };
     virtual int GetXPub(const std::vector<uint32_t> &vPath, CExtPubKey &ekp, std::string &sError) { return 0; };
 
     virtual int SignMessage(const std::vector<uint32_t> &vPath, const std::string &sMessage, std::vector<uint8_t> &vchSig, std::string &sError) { return 0; };

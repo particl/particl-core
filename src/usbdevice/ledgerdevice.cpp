@@ -220,7 +220,7 @@ int CLedgerDevice::GetInfo(UniValue &info, std::string &sError)
     return 0;
 };
 
-int CLedgerDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, std::string &sError)
+int CLedgerDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, bool display, std::string &sError)
 {
     if (vPath.size() < 1 || vPath.size() > MAX_BIP32_PATH) {
         return errorN(1, sError, __func__,"Path depth out of range.");
@@ -235,7 +235,11 @@ int CLedgerDevice::GetPubKey(const std::vector<uint32_t> &vPath, CPubKey &pk, st
     size_t apduSize = 0;
     in[apduSize++] = BTCHIP_CLA;
     in[apduSize++] = BTCHIP_INS_GET_WALLET_PUBLIC_KEY;
-    in[apduSize++] = 0x00;      // show on device
+    if (display) { // show on device
+        in[apduSize++] = 0x01;
+    } else {
+        in[apduSize++] = 0x00;
+    }
     in[apduSize++] = 0x00;      // segwit
     in[apduSize++] = 1 + 4 * lenPath; // num bytes to follow
     in[apduSize++] = lenPath;
