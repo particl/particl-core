@@ -479,3 +479,18 @@ void AddressTableModel::emitDataChanged(int idx)
     Q_EMIT dataChanged(index(idx, 0, QModelIndex()), index(idx, columns.length()-1, QModelIndex()));
 }
 
+void AddressTableModel::verifyOnHardwareDevice(QString path)
+{
+    if (walletModel->isHardwareLinkedWallet()) {
+        // Clean up the path, remove the m/ in front of it.
+        path.remove(0, 2);
+
+        // Make the device display the address (ledger only)
+        UniValue rv;
+        QString sCommandDisplay = "getdevicepublickey \"" + path + "\"";
+        if (!walletModel->tryCallRpc(sCommandDisplay, rv)) {
+            return;
+        }
+
+    }
+}

@@ -209,23 +209,18 @@ void AddressBookPage::onEditAction()
 
 void AddressBookPage::onVerifyAddressOnHWAction()
 {
-    if(!model)
+    QTableView *table = ui->tableView;
+    if(!table->selectionModel() || !table->model())
         return;
 
-    if(!ui->tableView->selectionModel())
-        return;
-    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows();
+    QModelIndexList indexes = table->selectionModel()->selectedRows(AddressTableModel::Path);
     if(indexes.isEmpty())
         return;
 
-
-    QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
-    // origIndex.row()
-
-    // Get address from row
-    // Get path for address (???)
-    // Call SelectDevice()
-    // Call getPubKey() with display=true
+    for (const QModelIndex& index : indexes) {
+        QVariant path = table->model()->data(index);
+        model->verifyOnHardwareDevice(path.toString());
+    }
 
 }
 
