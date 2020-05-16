@@ -8,11 +8,26 @@ https://particl.io
 What is Particl?
 ----------------
 
-An open source, decentralized privacy platform
-built for global person to person eCommerce.
+Particl is a decentralized, open source privacy platform for trading goods and services without intermediaries. The ecosystem currently includes the digital currency PART and the Particl Desktop (Marketplace) application.
 
-For more information, as well as an immediately usable, binary version of
-the Particl Core software, see https://particl.io.
+PART is the cryptocurrency of the Particl blockchain. It is an independent usable secure and confidential digital currency specifically designed to power a marketplace and acts as its transaction layer. It uses several security, encryption, and privacy protocols to make sure no personal information and data can be collected when transacting on the marketplace.
+
+|                          |                                          | 
+|:-------------------------|:-----------------------------------------| 
+| **Native blockchain**    | Particl                                  | 
+| **Blockchain codebase**  | Bitcoin (latest)                         |
+| **Block Time**           | 120 seconds                              | 
+| **Block Size**           | 2 MB                                     |
+| **Consensu Mechanism**   | Particl Proof-of-Stake (PPoS)            |
+| **Privacy Protocols**    | Confidential Transactions (CT) and RingCT|
+| **Bulletproofs**         | Enabled                                  |
+| **Stealth Addresses**    | Yes                                      |
+| **Ring Signatures**      | Yes                                      |
+| **Segwit**               | Enabled                                  |
+| **Lightning Network**    | Enabled                                  |
+| **Atomic Swaps**         | Enabled                                  |
+
+For more information please have a look at https://particl.io and https://particl.wiki. The Particl Desktop application is obtainable from this repository https://github.com/particl/particl-desktop.
 
 
 Getting Started
