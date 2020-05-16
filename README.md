@@ -12,11 +12,11 @@ Particl is a decentralized, open source privacy platform for trading goods and s
 
 PART is the cryptocurrency of the Particl blockchain. It is an independent usable secure and confidential digital currency specifically designed to power a marketplace and acts as its settlement layer. It uses several security, encryption, and privacy protocols to make sure no personal information and data can be collected when transacting on the marketplace.
 
-|Properties|Values| 
-|:-------------------------|:-----------------------------------------| 
-|Native blockchain|Particl| 
+|Properties|Values|
+|:-------------------------|:-----------------------------------------|
+|Native blockchain|Particl|
 |Blockchain codebase|Bitcoin (latest)|
-|Block Time|120 seconds| 
+|Block Time|120 seconds|
 |Block Size|2 MB|
 |Consensus Mechanism|Particl Proof-of-Stake (PPoS)|
 |Privacy Protocols|Confidential Transactions (CT) and RingCT|
