@@ -8,27 +8,27 @@ https://particl.io
 What is Particl?
 ----------------
 
-Particl is a decentralized, open source privacy platform for trading goods and services without intermediaries. The ecosystem currently includes the digital currency PART and the Particl Desktop (Marketplace) application.
+Particl is a decentralized, open source privacy platform for trading goods and services without intermediaries. The ecosystem currently includes the digital currency PART and the Particl Marketplace application.
 
-PART is the cryptocurrency of the Particl blockchain. It is an independent usable secure and confidential digital currency specifically designed to power a marketplace and acts as its transaction layer. It uses several security, encryption, and privacy protocols to make sure no personal information and data can be collected when transacting on the marketplace.
+PART is the cryptocurrency of the Particl blockchain. It is an independent usable secure and confidential digital currency specifically designed to power a marketplace and acts as its settlement layer. It uses several security, encryption, and privacy protocols to make sure no personal information and data can be collected when transacting on the marketplace.
 
-|                          |                                          | 
+|Properties|Values| 
 |:-------------------------|:-----------------------------------------| 
-| **Native blockchain**    | Particl                                  | 
-| **Blockchain codebase**  | Bitcoin (latest)                         |
-| **Block Time**           | 120 seconds                              | 
-| **Block Size**           | 2 MB                                     |
-| **Consensu Mechanism**   | Particl Proof-of-Stake (PPoS)            |
-| **Privacy Protocols**    | Confidential Transactions (CT) and RingCT|
-| **Bulletproofs**         | Enabled                                  |
-| **Stealth Addresses**    | Yes                                      |
-| **Ring Signatures**      | Yes                                      |
-| **Segwit**               | Enabled                                  |
-| **Lightning Network**    | Enabled                                  |
-| **Atomic Swaps**         | Enabled                                  |
+|Native blockchain|Particl| 
+|Blockchain codebase|Bitcoin (latest)|
+|Block Time|120 seconds| 
+|Block Size|2 MB|
+|Consensus Mechanism|Particl Proof-of-Stake (PPoS)|
+|Privacy Protocols|Confidential Transactions (CT) and RingCT|
+|Bulletproofs|:white_check_mark: yes|
+|Stealth Addresses|:white_check_mark: yes|
+|Ring Signatures|:white_check_mark: yes|
+|Cold Staking|:white_check_mark: yes|
+|Segwit|:white_check_mark: yes|
+|Lightning Network|:white_check_mark: yes|
+|Atomic Swaps|:white_check_mark: yes|
 
-For more information please have a look at https://particl.io and https://particl.wiki. The Particl Desktop application is obtainable from this repository https://github.com/particl/particl-desktop.
-
+For more information please visit https://particl.io and https://particl.wiki. The Particl Desktop application is available in this repository https://github.com/particl/particl-desktop.
 
 Getting Started
 ---------------
