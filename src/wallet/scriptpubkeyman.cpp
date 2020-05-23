@@ -542,7 +542,7 @@ std::unique_ptr<SigningProvider> LegacyScriptPubKeyMan::GetSolvingProvider(const
 
 bool LegacyScriptPubKeyMan::CanProvide(const CScript& script, SignatureData& sigdata)
 {
-    bool isInvalid;
+    bool isInvalid = false;
     isminetype ismine = IsMineInner(*this, script, isInvalid, IsMineSigVersion::TOP, /* recurse_scripthash= */ false);
     if (ismine & ISMINE_ALL) {
         // If ismine, it means we recognize keys or script ids in the script, or
