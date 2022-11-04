@@ -1707,12 +1707,12 @@ Signing is only possible with addresses of the type &apos;legacy&apos;.</source>
         <context-group purpose="location"><context context-type="linenumber">56</context></context-group>
       </trans-unit>
       <trans-unit id="_msg314">
-        <source xml:space="preserve">Import Chain</source>
+        <source xml:space="preserve">Create Import Chain</source>
         <target xml:space="preserve"></target>
         <context-group purpose="location"><context context-type="linenumber">63</context></context-group>
       </trans-unit>
       <trans-unit id="_msg315">
-        <source xml:space="preserve">Only needed if you&apos;re importing </source>
+        <source xml:space="preserve">Only needed if you&apos;re importing from the previous chain</source>
         <target xml:space="preserve"></target>
         <context-group purpose="location"><context context-type="linenumber">70</context></context-group>
       </trans-unit>

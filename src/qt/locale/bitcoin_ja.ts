@@ -673,7 +673,7 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     </message>
     <message>
         <source>Open a particl: URI</source>
-        <translation type="unfinished">bitcoin URIを開く</translation>
+        <translation type="unfinished">particl URIを開く</translation>
     </message>
     <message>
         <source>Open Wallet</source>
@@ -1379,7 +1379,7 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <name>OpenURIDialog</name>
     <message>
         <source>Open particl URI</source>
-        <translation type="unfinished">bitcoin URIを開く</translation>
+        <translation type="unfinished">particl URIを開く</translation>
     </message>
     </context>
 <context>
@@ -2352,11 +2352,11 @@ For more information on using this console, type %6.
     </message>
     <message>
         <source>To</source>
-        <translation type="unfinished">送金先</translation>
+        <translation type="unfinished">外向き</translation>
     </message>
     <message>
         <source>From</source>
-        <translation type="unfinished">送金元</translation>
+        <translation type="unfinished">内向き</translation>
     </message>
     <message>
         <source>Ban for</source>
@@ -2998,7 +2998,7 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
     </message>
     <message>
         <source>A message that was attached to the particl: URI which will be stored with the transaction for your reference. Note: This message will not be sent over the Particl network.</source>
-        <translation type="unfinished">particl URIに添付されていたメッセージです。これは参照用として取引とともに保存されます。注意: メッセージは Particl ネットワーク上へ送信されません。</translation>
+        <translation type="unfinished">bitcoin URIに添付されていたメッセージです。これは参照用として取引とともに保存されます。注意: メッセージは Particl ネットワーク上へ送信されません。</translation>
     </message>
     <message>
         <source>Pay To:</source>
