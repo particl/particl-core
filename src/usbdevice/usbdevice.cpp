@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 The Particl Core developers
+// Copyright (c) 2018-2022 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -31,6 +31,7 @@ const DeviceType usbDeviceTypes[] = {
     DeviceType(0x2c97, 0x1015, "Ledger",    "Nano S 1.6",   USBDEVICE_LEDGER_NANO_S),
     DeviceType(0x2c97, 0x0004, "Ledger",    "Nano X",       USBDEVICE_LEDGER_NANO_X),
     DeviceType(0x2c97, 0x4015, "Ledger",    "Nano X 1.6",   USBDEVICE_LEDGER_NANO_X),
+    DeviceType(0x2c97, 0x5015, "Ledger",    "Nano S Plus",  USBDEVICE_LEDGER_NANO_S_PLUS),
     //DeviceType(0x534c, 0x0001, "Trezor", "One", USBDEVICE_TREZOR_ONE),
 };
 
@@ -97,20 +98,23 @@ void ListHIDDevices(std::vector<std::unique_ptr<CUSBDevice> > &vDevices)
     while (cur_dev) {
         if (cur_dev->serial_number) // Possibly no access permission, check udev rules.
         for (const auto &type : usbDeviceTypes) {
-            if (cur_dev->vendor_id != type.nVendorId
-                || cur_dev->product_id != type.nProductId) {
+            if (cur_dev->vendor_id != type.nVendorId ||
+                cur_dev->product_id != type.nProductId) {
                 continue;
             }
 
-            if ((type.type == USBDEVICE_LEDGER_BLUE || type.type == USBDEVICE_LEDGER_NANO_S || type.type == USBDEVICE_LEDGER_NANO_X)
-                && MatchLedgerInterface(cur_dev)) {
+            if ((type.type == USBDEVICE_LEDGER_BLUE ||
+                 type.type == USBDEVICE_LEDGER_NANO_S ||
+                 type.type == USBDEVICE_LEDGER_NANO_X ||
+                 type.type == USBDEVICE_LEDGER_NANO_S_PLUS) &&
+                MatchLedgerInterface(cur_dev)) {
                 char mbs[128];
                 wcstombs(mbs, cur_dev->serial_number, sizeof(mbs));
                 std::unique_ptr<CUSBDevice> device(new CLedgerDevice(&type, cur_dev->path, mbs, cur_dev->interface_number));
                 vDevices.push_back(std::move(device));
             } else
-            if (type.type == USBDEVICE_TREZOR_ONE
-                && MatchTrezorInterface(cur_dev)) {
+            if (type.type == USBDEVICE_TREZOR_ONE &&
+                MatchTrezorInterface(cur_dev)) {
                 char mbs[128];
                 wcstombs(mbs, cur_dev->serial_number, sizeof(mbs));
                 std::unique_ptr<CUSBDevice> device(new CTrezorDevice(&type, cur_dev->path, mbs, cur_dev->interface_number));
@@ -138,13 +142,13 @@ void ListWebUSBDevices(std::vector<std::unique_ptr<CUSBDevice> > &vDevices)
     while (cur_dev) {
         if (cur_dev->serial_number) // Possibly no access permission, check udev rules.
         for (const auto &type : webusbDeviceTypes) {
-            if (cur_dev->vendor_id != type.nVendorId
-                || cur_dev->product_id != type.nProductId) {
+            if (cur_dev->vendor_id != type.nVendorId ||
+                cur_dev->product_id != type.nProductId) {
                 continue;
             }
 
-            if (type.type == USBDEVICE_TREZOR_ONE
-                && cur_dev->interface_number == 0) {
+            if (type.type == USBDEVICE_TREZOR_ONE &&
+                cur_dev->interface_number == 0) {
                 char mbs[128];
                 wcstombs(mbs, cur_dev->serial_number, sizeof(mbs));
                 std::unique_ptr<CUSBDevice> device(new CTrezorDevice(&type, cur_dev->path, mbs, cur_dev->interface_number));

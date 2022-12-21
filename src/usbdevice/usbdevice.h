@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 The Particl Core developers
+// Copyright (c) 2018-2022 The Particl Core developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,6 +28,7 @@ enum DeviceTypeID {
     USBDEVICE_TREZOR_ONE = 2,
     USBDEVICE_LEDGER_BLUE = 3,
     USBDEVICE_LEDGER_NANO_X = 4,
+    USBDEVICE_LEDGER_NANO_S_PLUS = 5,
     USBDEVICE_SIZE,
 };
 
