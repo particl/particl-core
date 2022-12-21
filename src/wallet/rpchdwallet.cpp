@@ -5024,24 +5024,24 @@ static RPCHelpMan listunspentblind()
         }
     }
 
-    std::set<CBitcoinAddress> setAddress;
+    std::set<CTxDestination> setAddress;
     if (request.params.size() > 2 && !request.params[2].isNull()) {
         RPCTypeCheckArgument(request.params[2], UniValue::VARR);
         UniValue inputs = request.params[2].get_array();
         for (unsigned int idx = 0; idx < inputs.size(); idx++) {
             const UniValue& input = inputs[idx];
             CBitcoinAddress address(input.get_str());
-            if (!address.IsValidStealthAddress()) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Particl stealth address: ")+input.get_str());
+            if (!address.IsValidStealthAddress() && !address.IsValid()) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Particl address or stealth address: ")+input.get_str());
             }
-            if (setAddress.count(address)) {
+            if (setAddress.count(address.Get())) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, duplicated address: ")+input.get_str());
             }
-           setAddress.insert(address);
+           setAddress.insert(address.Get());
         }
     }
 
-    bool include_unsafe = true;
+    bool include_unsafe{true};
     if (request.params.size() > 3 && !request.params[3].isNull()) {
         RPCTypeCheckArgument(request.params[3], UniValue::VBOOL);
         include_unsafe = request.params[3].get_bool();
@@ -5077,21 +5077,23 @@ static RPCHelpMan listunspentblind()
 
         CAmount nValue = pout->nValue;
 
+        bool address_is_whitelisted{false};
         CTxDestination address;
         const CScript *scriptPubKey = &pout->scriptPubKey;
         bool fValidAddress = ExtractDestination(*scriptPubKey, address);
         bool reused = avoid_reuse && pwallet->IsSpentKey(out.txhash, out.i);
-        if (setAddress.size() && (!fValidAddress || !setAddress.count(CBitcoinAddress(address))))
-            continue;
+        if (fValidAddress && setAddress.count(address)) {
+            address_is_whitelisted = true;
+        }
 
         UniValue entry(UniValue::VOBJ);
         entry.pushKV("txid", out.txhash.GetHex());
         entry.pushKV("vout", out.i);
 
         if (fValidAddress) {
-            entry.pushKV("address", CBitcoinAddress(address).ToString());
+            entry.pushKV("address", EncodeDestination(address));
 
-            auto i = pwallet->m_address_book.find(address);
+            const auto i = pwallet->m_address_book.find(address);
             if (i != pwallet->m_address_book.end()) {
                 entry.pushKV("label", i->second.GetLabel());
             }
@@ -5106,6 +5108,9 @@ static RPCHelpMan listunspentblind()
                         if (i != pwallet->m_address_book.end()) {
                             entry.pushKV("label", i->second.GetLabel());
                         }
+                    }
+                    if (!address_is_whitelisted && setAddress.count(sx)) {
+                        address_is_whitelisted = true;
                     }
                 }
             }
@@ -5125,6 +5130,10 @@ static RPCHelpMan listunspentblind()
                 if (provider->GetCScript(scriptID, redeemScript))
                     entry.pushKV("redeemScript", HexStr(redeemScript));
             }
+        }
+
+        if (setAddress.size() && !address_is_whitelisted) {
+            continue;
         }
 
         entry.pushKV("scriptPubKey", HexStr(*scriptPubKey));

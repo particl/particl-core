@@ -95,7 +95,6 @@ class BlindTest(ParticlTestFramework):
         assert(isclose(e['amount'], 0.2))
         assert(e['stealth_address'] == sxAddrTo2_1)
 
-
         txnHash4 = nodes[1].sendtypeto('blind', 'part', [{'address': sxAddrTo2_1, 'amount': 0.5, 'narr': 'node1 -> node2 b->p'},])
 
         ro = nodes[1].getwalletinfo()
@@ -120,7 +119,6 @@ class BlindTest(ParticlTestFramework):
         assert(len(ro) == 2)
 
 
-
         sxAddrTo2_3 = nodes[2].getnewstealthaddress('n2 sx+prefix', '4', '0xaaaa')
         ro = nodes[2].validateaddress(sxAddrTo2_3)
         assert(ro['isvalid'] == True)
@@ -134,6 +132,16 @@ class BlindTest(ParticlTestFramework):
 
         ro = nodes[2].listtransactions()
         assert(ro[-1]['txid'] == txnHash5)
+
+        self.log.info('Test listunspentblind address filtering')
+        unspents = nodes[2].listunspentblind(0, 9999, [sxAddrTo2_1])
+        assert (len(unspents) == 1)
+        assert (unspents[0]['txid'] == txnHash3)
+        unspents = nodes[2].listunspentblind(0, 9999, [unspents[0]['address']])
+        assert (len(unspents) == 1)
+        assert (unspents[0]['txid'] == txnHash3)
+        unspents = nodes[2].listunspentblind(0, 9999)
+        assert (len(unspents) > 1)
 
         ro = nodes[0].getwalletinfo()
         # Some of the balance will have staked

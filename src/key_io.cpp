@@ -655,8 +655,8 @@ bool CBitcoinAddress::IsValid(CChainParams::Base58Type prefix) const
 {
     if (m_bech32) {
         CChainParams::Base58Type prefixOut;
-        if (!Params().IsBech32Prefix(vchVersion, prefixOut)
-            || prefix != prefixOut) {
+        if (!Params().IsBech32Prefix(vchVersion, prefixOut) ||
+            prefix != prefixOut) {
             return false;
         }
 
@@ -684,16 +684,16 @@ bool CBitcoinAddress::IsValid(CChainParams::Base58Type prefix) const
     };
 
     bool fKnownVersion = vchVersion == Params().Base58Prefix(prefix);
-    if (prefix == CChainParams::EXT_PUBLIC_KEY
-        || prefix == CChainParams::EXT_SECRET_KEY)
+    if (prefix == CChainParams::EXT_PUBLIC_KEY ||
+        prefix == CChainParams::EXT_SECRET_KEY)
         return fKnownVersion && vchData.size() == BIP32_KEY_N_BYTES;
 
     if (prefix == CChainParams::STEALTH_ADDRESS) {
         return IsValidStealthAddress();
     }
 
-    if (prefix == CChainParams::PUBKEY_ADDRESS_256
-        || prefix == CChainParams::SCRIPT_ADDRESS_256)
+    if (prefix == CChainParams::PUBKEY_ADDRESS_256 ||
+        prefix == CChainParams::SCRIPT_ADDRESS_256)
         return fKnownVersion && vchData.size() == 32;
 
     bool fCorrectSize = vchData.size() == 20;
@@ -707,53 +707,46 @@ CTxDestination CBitcoinAddress::Get() const
     }
     uint160 id;
 
-    if (vchVersion == Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS)
-        || vchVersion == Params().Bech32Prefix(CChainParams::PUBKEY_ADDRESS))
-    {
+    if (vchVersion == Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::PUBKEY_ADDRESS)) {
         memcpy(&id, vchData.data(), 20);
         return PKHash(id);
     } else
-    if (vchVersion == Params().Base58Prefix(CChainParams::SCRIPT_ADDRESS)
-        || vchVersion == Params().Bech32Prefix(CChainParams::SCRIPT_ADDRESS))
-    {
+    if (vchVersion == Params().Base58Prefix(CChainParams::SCRIPT_ADDRESS) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::SCRIPT_ADDRESS)) {
         memcpy(&id, vchData.data(), 20);
         return ScriptHash(id);
     } else
-    /*if (vchVersion == Params().Base58Prefix(CChainParams::EXT_SECRET_KEY)
-        || vchVersion == Params().Bech32Prefix(CChainParams::EXT_SECRET_KEY))
+    /*if (vchVersion == Params().Base58Prefix(CChainParams::EXT_SECRET_KEY) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::EXT_SECRET_KEY))
     {
         CExtKeyPair kp;
         kp.DecodeV(vchData.data());
         return kp;
     } else */
-    if (vchVersion == Params().Base58Prefix(CChainParams::STEALTH_ADDRESS)
-        || vchVersion == Params().Bech32Prefix(CChainParams::STEALTH_ADDRESS))
-    {
+    if (vchVersion == Params().Base58Prefix(CChainParams::STEALTH_ADDRESS) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::STEALTH_ADDRESS)) {
         CStealthAddress sx;
         if (0 == sx.FromRaw(vchData.data(), vchData.size()))
             return sx;
         return CNoDestination();
     } else
-    if (vchVersion == Params().Base58Prefix(CChainParams::EXT_PUBLIC_KEY)
-        || vchVersion == Params().Bech32Prefix(CChainParams::EXT_PUBLIC_KEY))
-    {
+    if (vchVersion == Params().Base58Prefix(CChainParams::EXT_PUBLIC_KEY) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::EXT_PUBLIC_KEY)) {
         CExtPubKey kp;
         kp.Decode(vchData.data());
         return kp;
-    }
-    else
-    if (vchVersion == Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS_256)
-        || vchVersion == Params().Bech32Prefix(CChainParams::PUBKEY_ADDRESS_256))
-    {
+    } else
+    if (vchVersion == Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS_256) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::PUBKEY_ADDRESS_256)) {
         return CKeyID256(*((uint256*)vchData.data()));
     } else
-    if (vchVersion == Params().Base58Prefix(CChainParams::SCRIPT_ADDRESS_256)
-        || vchVersion == Params().Bech32Prefix(CChainParams::SCRIPT_ADDRESS_256))
-    {
+    if (vchVersion == Params().Base58Prefix(CChainParams::SCRIPT_ADDRESS_256) ||
+        vchVersion == Params().Bech32Prefix(CChainParams::SCRIPT_ADDRESS_256)) {
         //uint256 id;
         //memcpy(&id, vchData.data(), 32);
         return CScriptID256(*((uint256*)vchData.data()));
-    };
+    }
 
     return CNoDestination();
 }
@@ -771,8 +764,9 @@ CTxDestination CBitcoinAddress::GetStakeOnly() const
 
 bool CBitcoinAddress::GetKeyID(CKeyID& keyID) const
 {
-    if (!IsValid() || vchVersion != Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS))
+    if (!IsValid() || vchVersion != Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS)) {
         return false;
+    }
     uint160 id;
     memcpy(&id, vchData.data(), 20);
     keyID = CKeyID(id);
@@ -781,8 +775,9 @@ bool CBitcoinAddress::GetKeyID(CKeyID& keyID) const
 
 bool CBitcoinAddress::GetKeyID(CKeyID256& keyID) const
 {
-    if (!IsValid() || vchVersion != Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS_256))
+    if (!IsValid() || vchVersion != Params().Base58Prefix(CChainParams::PUBKEY_ADDRESS_256)) {
         return false;
+    }
     uint256 id;
     memcpy(&id, vchData.data(), 32);
     keyID = CKeyID256(id);
