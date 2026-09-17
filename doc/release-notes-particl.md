@@ -1,4 +1,11 @@
 
+23.2.12
+==============
+
+- Hardened anon transaction input validation.
+- secp256k1: Invalid commitments are rejected when loaded.
+
+
 23.2.11
 ==============
 
