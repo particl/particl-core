@@ -127,7 +127,9 @@ SECP256K1_INLINE static int secp256k1_bulletproof_deserialize_point(secp256k1_ge
     const size_t offset = bitveclen + i*32;
     secp256k1_fe fe;
 
-    secp256k1_fe_set_b32(&fe, &data[offset]);
+    if (!secp256k1_fe_set_b32(&fe, &data[offset])) {
+        return 0;
+    }
     if (secp256k1_ge_set_xquad(pt, &fe)) {
         if (data[i / 8] & (1 << (i % 8))) {
             secp256k1_ge_neg(pt, pt);

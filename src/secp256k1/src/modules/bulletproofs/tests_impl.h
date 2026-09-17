@@ -98,6 +98,22 @@ static void test_bulletproof_api(void) {
     CHECK(secp256k1_bulletproof_rangeproof_prove(both, scratch, gens, proof, &plen, &value[2], &min_value[2], blind_ptr, 2, &value_gen, 64, blind, NULL, 0) == 0); /* mv > v, !ok */
     CHECK(ecount == 1);
 
+    /* aggregate proof with min_value, exercises the z^i scaling of min_value and min_value >= 2^32 */
+    {
+        secp256k1_pedersen_commitment pcommit_big[2];
+        uint64_t value_big[2] = { (1ULL << 40) + 1234, (1ULL << 40) + 4567 };
+        uint64_t min_big[2] = { (1ULL << 40) + 1000, 1ULL << 40 };
+        CHECK(secp256k1_pedersen_commit(both, &pcommit_big[0], blind, value_big[0], &value_gen, &secp256k1_generator_const_h) != 0);
+        CHECK(secp256k1_pedersen_commit(both, &pcommit_big[1], blind, value_big[1], &value_gen, &secp256k1_generator_const_h) != 0);
+        plen = 2000;
+        CHECK(secp256k1_bulletproof_rangeproof_prove(both, scratch, gens, proof, &plen, value_big, min_big, blind_ptr, 2, &value_gen, 64, blind, NULL, 0) == 1);
+        CHECK(secp256k1_bulletproof_rangeproof_verify(both, scratch, gens, proof, plen, min_big, pcommit_big, 2, 64, &value_gen, NULL, 0) == 1);
+        min_big[1] += 1;
+        CHECK(secp256k1_bulletproof_rangeproof_verify(both, scratch, gens, proof, plen, min_big, pcommit_big, 2, 64, &value_gen, NULL, 0) == 0);
+        plen = 2000;
+        CHECK(ecount == 1);
+    }
+
     CHECK(secp256k1_bulletproof_rangeproof_prove(both, NULL, gens, proof, &plen, value, NULL, blind_ptr, 1, &value_gen, 64, blind, NULL, 0) == 0);
     CHECK(ecount == 2);
     CHECK(secp256k1_bulletproof_rangeproof_prove(both, scratch, NULL, proof, &plen, value, NULL, blind_ptr, 1, &value_gen, 64, blind, NULL, 0) == 0);

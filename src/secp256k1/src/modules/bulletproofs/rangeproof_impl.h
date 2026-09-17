@@ -115,11 +115,11 @@ static int secp256k1_bulletproof_rangeproof_vfy_callback(secp256k1_scalar *sc, s
                 }
                 if (ctx->min_value != NULL) {
                     secp256k1_scalar mv;
-                    secp256k1_scalar_set_int(&mv, ctx->min_value[i]);
+                    secp256k1_scalar_set_u64(&mv, ctx->min_value[i]);
                     secp256k1_scalar_mul(&mv, &mv, &ctx->negz);
                     secp256k1_scalar_mul(&mv, &mv, &ctx->z);
                     for (j = 0; j < i; j++) {
-                        secp256k1_scalar_mul(&negzn, &negzn, &ctx->z);
+                        secp256k1_scalar_mul(&mv, &mv, &ctx->z);
                     }
                     secp256k1_scalar_add(&twosum, &twosum, &mv);
                 }
@@ -714,7 +714,9 @@ static int secp256k1_bulletproof_rangeproof_rewind_impl(uint64_t *value, secp256
         secp256k1_sha256_finalize(&sha256, commit);
     }
 
-    secp256k1_pedersen_commitment_load(&commitp, pcommit);
+    if (!secp256k1_pedersen_commitment_load(&commitp, pcommit)) {
+        return 0;
+    }
     secp256k1_generator_load(&value_genp, value_gen);
     secp256k1_bulletproof_update_commit(commit, &commitp, &value_genp);
 

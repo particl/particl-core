@@ -72,12 +72,26 @@ static void test_commitment_api(void) {
     CHECK(secp256k1_pedersen_verify_tally(none, &commit_ptr, 1, &commit_ptr, 1) != 0);
     CHECK(secp256k1_pedersen_verify_tally(none, NULL, 0, &commit_ptr, 1) == 0);
     CHECK(secp256k1_pedersen_verify_tally(none, &commit_ptr, 1, NULL, 0) == 0);
-    CHECK(secp256k1_pedersen_verify_tally(none, NULL, 0, NULL, 0) != 0);
+    CHECK(secp256k1_pedersen_verify_tally(none, NULL, 0, NULL, 0) == 0);
     CHECK(ecount == 9);
     CHECK(secp256k1_pedersen_verify_tally(none, NULL, 1, &commit_ptr, 1) == 0);
     CHECK(ecount == 10);
     CHECK(secp256k1_pedersen_verify_tally(none, &commit_ptr, 1, NULL, 1) == 0);
     CHECK(ecount == 11);
+    {
+        /* Commitments which did not pass through parse or commit must not load */
+        secp256k1_pedersen_commitment bad_commit;
+        const secp256k1_pedersen_commitment *bad_ptr = &bad_commit;
+        unsigned char output[33];
+        memset(&bad_commit, 0, sizeof(bad_commit));
+        CHECK(secp256k1_pedersen_verify_tally(none, &bad_ptr, 1, &bad_ptr, 1) == 0);
+        CHECK(secp256k1_pedersen_commitment_serialize(none, output, &bad_commit) == 0);
+        CHECK(secp256k1_pedersen_commitment_sum(none, &bad_commit, &bad_ptr, 1) == 0);
+        memcpy(&bad_commit, &commit, sizeof(bad_commit));
+        bad_commit.data[0] = 0x02;
+        CHECK(secp256k1_pedersen_verify_tally(none, &bad_ptr, 1, &bad_ptr, 1) == 0);
+        CHECK(ecount == 11);
+    }
 
     CHECK(secp256k1_pedersen_blind_generator_blind_sum(none, &val, &blind_ptr, &blind_out_ptr, 1, 0) != 0);
     CHECK(ecount == 11);

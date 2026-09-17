@@ -7,13 +7,16 @@
 #ifndef SECP256K1_MLSAG_MAIN
 #define SECP256K1_MLSAG_MAIN
 
-static void pedersen_commitment_load(secp256k1_ge *ge, const uint8_t *commit) {
+static int pedersen_commitment_load(secp256k1_ge *ge, const uint8_t *commit) {
     secp256k1_fe fe;
-    secp256k1_fe_set_b32(&fe, &commit[1]);
-    secp256k1_ge_set_xquad(ge, &fe);
+    if (!secp256k1_fe_set_b32(&fe, &commit[1]) ||
+        !secp256k1_ge_set_xquad(ge, &fe)) {
+        return 0;
+    }
     if (commit[0] & 1) {
         secp256k1_ge_neg(ge, ge);
     }
+    return 1;
 }
 
 static void pedersen_commitment_save(uint8_t *commit, secp256k1_ge *ge) {
@@ -25,8 +28,7 @@ static void pedersen_commitment_save(uint8_t *commit, secp256k1_ge *ge) {
 static int load_ge(secp256k1_ge *ge, const uint8_t *data, size_t len)
 {
     if (len == 33 && (data[0] == 0x08 || data[0] == 0x09)) {
-        pedersen_commitment_load(ge, data);
-        return 1;
+        return pedersen_commitment_load(ge, data);
     }
     return secp256k1_eckey_pubkey_parse(ge, data, len);
 }

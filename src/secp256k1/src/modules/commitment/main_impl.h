@@ -26,13 +26,17 @@ static const secp256k1_generator secp256k1_generator_h_internal = {{
 
 const secp256k1_generator *secp256k1_generator_h = &secp256k1_generator_h_internal;
 
-static void secp256k1_pedersen_commitment_load(secp256k1_ge* ge, const secp256k1_pedersen_commitment* commit) {
+static int secp256k1_pedersen_commitment_load(secp256k1_ge* ge, const secp256k1_pedersen_commitment* commit) {
     secp256k1_fe fe;
-    secp256k1_fe_set_b32(&fe, &commit->data[1]);
-    secp256k1_ge_set_xquad(ge, &fe);
+    if ((commit->data[0] & 0xFE) != 8 ||
+        !secp256k1_fe_set_b32(&fe, &commit->data[1]) ||
+        !secp256k1_ge_set_xquad(ge, &fe)) {
+        return 0;
+    }
     if (commit->data[0] & 1) {
         secp256k1_ge_neg(ge, ge);
     }
+    return 1;
 }
 
 static void secp256k1_pedersen_commitment_save(secp256k1_pedersen_commitment* commit, secp256k1_ge* ge) {
@@ -69,7 +73,9 @@ int secp256k1_pedersen_commitment_serialize(const secp256k1_context* ctx, unsign
     ARG_CHECK(output != NULL);
     ARG_CHECK(commit != NULL);
 
-    secp256k1_pedersen_commitment_load(&ge, commit);
+    if (!secp256k1_pedersen_commitment_load(&ge, commit)) {
+        return 0;
+    }
 
     output[0] = 9 ^ secp256k1_fe_is_quad_var(&ge.y);
     secp256k1_fe_normalize_var(&ge.x);
@@ -147,14 +153,21 @@ int secp256k1_pedersen_verify_tally(const secp256k1_context* ctx, const secp256k
     ARG_CHECK(!n_pos || (pos != NULL));
     ARG_CHECK(!n_neg || (neg != NULL));
     (void) ctx;
+    if (n_pos + n_neg == 0) {
+        return 0;
+    }
     secp256k1_gej_set_infinity(&accj);
     for (i = 0; i < n_neg; i++) {
-        secp256k1_pedersen_commitment_load(&add, neg[i]);
+        if (!secp256k1_pedersen_commitment_load(&add, neg[i])) {
+            return 0;
+        }
         secp256k1_gej_add_ge_var(&accj, &accj, &add, NULL);
     }
     secp256k1_gej_neg(&accj, &accj);
     for (i = 0; i < n_pos; i++) {
-        secp256k1_pedersen_commitment_load(&add, pos[i]);
+        if (!secp256k1_pedersen_commitment_load(&add, pos[i])) {
+            return 0;
+        }
         secp256k1_gej_add_ge_var(&accj, &accj, &add, NULL);
     }
     return secp256k1_gej_is_infinity(&accj);
@@ -227,7 +240,9 @@ int secp256k1_pedersen_commitment_sum(const secp256k1_context* ctx, secp256k1_pe
 
     secp256k1_gej_set_infinity(&accj);
     for (i = 0; i < n; i++) {
-        secp256k1_pedersen_commitment_load(&add, commits[i]);
+        if (!secp256k1_pedersen_commitment_load(&add, commits[i])) {
+            return 0;
+        }
         secp256k1_gej_add_ge_var(&accj, &accj, &add, NULL);
     }
 
