@@ -1986,7 +1986,7 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
                 uint32_t nInputs, nRingSize;
                 txin.GetAnonInfo(nInputs, nRingSize);
                 if (txin.scriptData.stack.size() != 1
-                    || txin.scriptData.stack[0].size() != 33 * nInputs) {
+                    || txin.scriptData.stack[0].size() != (size_t)33 * nInputs) {
                     error("%s: Bad scriptData stack, %s.", __func__, hash.ToString());
                     return DISCONNECT_FAILED;
                 }

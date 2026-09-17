@@ -313,4 +313,30 @@ BOOST_AUTO_TEST_CASE(ct_commitment_test)
     secp256k1_context_destroy(ctx);
 }
 
+BOOST_AUTO_TEST_CASE(ct_commitment_zero_test)
+{
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+
+    secp256k1_pedersen_commitment commitment_zero, commitment_blinded, commitment_value;
+    uint8_t blind[32];
+    memset(blind, 0, 32);
+
+    // 0*H + 0*G is the point at infinity, which has no encoding
+    memset(&commitment_zero, 0xff, sizeof(commitment_zero));
+    BOOST_CHECK(!secp256k1_pedersen_commit(ctx, &commitment_zero, blind, 0, &secp256k1_generator_const_h, &secp256k1_generator_const_g));
+
+    memset(blind, 1, 32);
+    BOOST_CHECK(secp256k1_pedersen_commit(ctx, &commitment_blinded, blind, 0, &secp256k1_generator_const_h, &secp256k1_generator_const_g));
+    BOOST_CHECK(secp256k1_pedersen_commit(ctx, &commitment_value, blind, 10, &secp256k1_generator_const_h, &secp256k1_generator_const_g));
+
+    // A zero unblinded value balances by omission, not by an all-zero commitment
+    const secp256k1_pedersen_commitment *pc_pos[1] = {&commitment_value};
+    const secp256k1_pedersen_commitment *pc_neg[2] = {&commitment_value, &commitment_zero};
+    BOOST_CHECK(secp256k1_pedersen_verify_tally(ctx, pc_pos, 1, pc_neg, 1));
+    memset(&commitment_zero, 0, sizeof(commitment_zero));
+    BOOST_CHECK(!secp256k1_pedersen_verify_tally(ctx, pc_pos, 1, pc_neg, 2));
+
+    secp256k1_context_destroy(ctx);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

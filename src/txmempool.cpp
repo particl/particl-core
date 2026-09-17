@@ -874,7 +874,13 @@ void CTxMemPool::removeConflicts(const CTransaction &tx)
             uint32_t nInputs, nRingSize;
             txin.GetAnonInfo(nInputs, nRingSize);
 
+            if (txin.scriptData.stack.size() != 1) {
+                continue;
+            }
             const std::vector<uint8_t> &vKeyImages = txin.scriptData.stack[0];
+            if (vKeyImages.size() != (size_t)nInputs * 33) {
+                continue;
+            }
             for (size_t k = 0; k < nInputs; ++k) {
                 const CCmpPubKey &ki = *((CCmpPubKey*)&vKeyImages[k*33]);
                 uint256 txhashKI;

@@ -229,6 +229,7 @@ BOOST_AUTO_TEST_CASE(mixed_input_types)
                 std::vector<uint8_t> vpkm, vki(33, 0);
                 part::PutVarInt(vpkm, 1);
                 ai.scriptWitness.stack.emplace_back(vpkm);
+                ai.scriptWitness.stack.emplace_back();
                 ai.scriptData.stack.emplace_back(vki);
                 txn.vin.push_back(ai);
                 continue;

@@ -139,7 +139,7 @@ int GetRangeProofInfo(const std::vector<uint8_t> &vRangeproof, int &rexp, int &r
     }
     return (!(secp256k1_rangeproof_info(secp256k1_ctx_blind,
         &rexp, &rmantissa, (uint64_t*) &min_value, (uint64_t*) &max_value,
-        &vRangeproof[0], vRangeproof.size()) == 1));
+        vRangeproof.data(), vRangeproof.size()) == 1));
 }
 
 void LoadRCTBlacklist(const int64_t indices[], size_t num_indices)

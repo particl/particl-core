@@ -83,10 +83,16 @@ bool VerifyMLSAG(const CTransaction &tx, TxValidationState &state)
 
     nPlainValueOut += nTxFee;
 
-    // Get commitment for unblinded amount
+    // Remove at the next hardfork, a zero plain value balances without a plain commitment
+    if (nPlainValueOut == 0) {
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-anon-zero-fee");
+    }
+
+    // Get commitment for unblinded amount, commit(0) is the point at infinity and is left out of the sums
     uint8_t zeroBlind[32] = {0};
     secp256k1_pedersen_commitment plainCommitment;
-    if (nPlainValueOut > 0) {
+    const bool have_plain_commitment = nPlainValueOut > 0;
+    if (have_plain_commitment) {
         if (!secp256k1_pedersen_commit(secp256k1_ctx_blind,
             &plainCommitment, zeroBlind, (uint64_t) nPlainValueOut, &secp256k1_generator_const_h, &secp256k1_generator_const_g)) {
             return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-plain-commitment");
@@ -151,7 +157,9 @@ bool VerifyMLSAG(const CTransaction &tx, TxValidationState &state)
             vpOutCommits.push_back(split_commit);
             vpInputSplitCommits.push_back(split_commit);
         } else {
-            vpOutCommits.push_back(plainCommitment.data);
+            if (have_plain_commitment) {
+                vpOutCommits.push_back(plainCommitment.data);
+            }
 
             secp256k1_pedersen_commitment *pc;
             for (const auto &txout : tx.vpout) {
@@ -219,7 +227,7 @@ bool VerifyMLSAG(const CTransaction &tx, TxValidationState &state)
         }
         if (0 != (rv = secp256k1_prepare_mlsag(&vM[0], nullptr,
             vpOutCommits.size(), 0, nCols, nRows,
-            &vpInCommits[0], &vpOutCommits[0], nullptr))) {
+            vpInCommits.data(), vpOutCommits.data(), nullptr))) {
             LogPrintf("ERROR: %s: prepare-mlsag-failed %d\n", __func__, rv);
             return state.Invalid(TxValidationResult::TX_CONSENSUS, "prepare-mlsag-failed");
         }
@@ -234,7 +242,9 @@ bool VerifyMLSAG(const CTransaction &tx, TxValidationState &state)
     // Verify commitment sums match
     if (fSplitCommitments) {
         std::vector<const uint8_t*> vpOutCommits;
-        vpOutCommits.push_back(plainCommitment.data);
+        if (have_plain_commitment) {
+            vpOutCommits.push_back(plainCommitment.data);
+        }
 
         secp256k1_pedersen_commitment *pc;
         for (const auto &txout : tx.vpout) {
@@ -270,9 +280,12 @@ bool AddKeyImagesToMempool(const CTransaction &tx, CTxMemPool &pool)
         uint32_t nInputs, nRingSize;
         txin.GetAnonInfo(nInputs, nRingSize);
 
+        if (txin.scriptData.stack.size() != 1) {
+            return false;
+        }
         const std::vector<uint8_t> &vKeyImages = txin.scriptData.stack[0];
 
-        if (vKeyImages.size() != nInputs * 33) {
+        if (vKeyImages.size() != (size_t)nInputs * 33) {
             return false;
         }
 
@@ -294,9 +307,12 @@ bool RemoveKeyImagesFromMempool(const uint256 &hash, const CTxIn &txin, CTxMemPo
     uint32_t nInputs, nRingSize;
     txin.GetAnonInfo(nInputs, nRingSize);
 
+    if (txin.scriptData.stack.size() != 1) {
+        return false;
+    }
     const std::vector<uint8_t> &vKeyImages = txin.scriptData.stack[0];
 
-    if (vKeyImages.size() != nInputs * 33) {
+    if (vKeyImages.size() != (size_t)nInputs * 33) {
         return false;
     }
 

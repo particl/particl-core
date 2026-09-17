@@ -1128,16 +1128,19 @@ inline int PutVarInt(uint8_t *p, uint64_t i)
 
 inline int GetVarInt(const std::vector<uint8_t> &v, size_t ofs, uint64_t &i, size_t &nB)
 {
-    size_t ml = v.size() - ofs;
-    if (ml <= 0) {
-        return 0;
+    if (ofs >= v.size()) {
+        return 1;
     }
+    size_t ml = v.size() - ofs;
     const uint8_t *p = &v[ofs];
     nB = 0;
     i = p[nB++] & 0x7F;
     while (p[nB-1] & 0x80) {
         if (nB >= ml)
             return 1;
+        if (7 * nB >= 64) { // encoding longer than a uint64_t can hold; the shift would be undefined
+            return 1;
+        }
         i += ((uint64_t(p[nB]& 0x7F)) << (7*nB));
         nB++;
     }

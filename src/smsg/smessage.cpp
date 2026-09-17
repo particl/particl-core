@@ -3709,6 +3709,9 @@ int CSMSG::CheckFundingTx(const Consensus::Params &consensusParams, const Secure
             return SMSG_FUND_DATA_NOT_FOUND;
         }
     }
+    if (db_data.size() < 32) {
+        return errorN(SMSG_GENERAL_ERROR, "%s: Funding data too short for txn: %s.\n", __func__, txid.ToString());
+    }
     const uint256 &hashBlock = *((const uint256*) db_data.data());
 
     int blockDepth = -1;
